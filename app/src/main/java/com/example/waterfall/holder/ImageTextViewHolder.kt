@@ -10,7 +10,7 @@ import com.example.waterfall.R
 import com.example.waterfall.data.FeedItem
 
 class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
-    private val avatar: ImageView = view.findViewById(R.id.iv_avatar)
+    private val avatar: ImageView = view.findViewById(R.id.avatar)
     private val authorName: TextView = view.findViewById(R.id.author_name)
     private val content: TextView = view.findViewById(R.id.post_content)
     private val coverImage: ImageView = view.findViewById(R.id.cover_image)
