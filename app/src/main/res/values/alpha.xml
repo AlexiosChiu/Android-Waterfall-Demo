@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="navi_text_deactivated_alpha">0.65</dimen>
+</resources>

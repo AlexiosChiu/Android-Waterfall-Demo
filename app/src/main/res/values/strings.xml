@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Waterfall</string>
+    <string name="top_navigation_city">北京</string>
+    <string name="top_navigation_tuangou">团购</string>
+    <string name="top_navigation_subscribe">关注</string>
+    <string name="top_navigation_community">社区</string>
+    <string name="top_navigation_recommend">推荐</string>
+    <string name="btm_navigation_home">首页</string>
+    <string name="btm_navigation_friends">朋友</string>
+    <string name="btm_navigation_message">消息</string>
+    <string name="btm_navigation_profile">我</string>
+
+</resources>

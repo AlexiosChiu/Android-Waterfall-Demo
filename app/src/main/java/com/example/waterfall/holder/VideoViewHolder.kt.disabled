@@ -1,0 +1,53 @@
+package com.example.waterfall.holder
+
+import android.view.View
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.TextView
+import com.bumptech.glide.Glide
+import com.example.waterfall.R
+import com.example.waterfall.data.FeedItem
+
+class VideoViewHolder(private val view: View) : ItemViewHolder(view) {
+
+    private val avatar: ImageView = view.findViewById(R.id.iv_avatar)
+    private val authorName: TextView = view.findViewById(R.id.tv_author_name)
+    private val content: TextView = view.findViewById(R.id.tv_content)
+    private val videoCover: ImageView = view.findViewById(R.id.iv_video_cover)
+    private val duration: TextView = view.findViewById(R.id.tv_duration)
+    private val playButton: ImageButton = view.findViewById(R.id.btn_play)
+
+    override fun bind(item: FeedItem) {
+        if (item is FeedItem.VideoItem) {
+            authorName.text = item.authorName
+            content.text = item.content
+            duration.text = item.duration
+
+            // 加载头像和视频封面
+            Glide.with(avatar.context)
+                .load(item.avatar)
+                .circleCrop()
+                .into(avatar)
+
+            Glide.with(videoCover.context)
+                .load(item.coverImage)
+                .into(videoCover)
+
+            // 设置播放按钮点击事件
+            playButton.setOnClickListener {
+                // 这里处理视频播放逻辑
+                playVideo(item.videoUrl)
+            }
+        }
+    }
+
+    private fun playVideo(videoUrl: String) {
+        // 视频播放逻辑（后续可以集成ExoPlayer）
+        // 暂时用Toast提示
+        android.widget.Toast.makeText(
+            view.context,
+            "播放视频: $videoUrl",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+}
