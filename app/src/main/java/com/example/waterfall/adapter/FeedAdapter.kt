@@ -14,8 +14,8 @@ class FeedAdapter : RecyclerView.Adapter<ItemViewHolder>() {
 
     override fun getItemViewType(position: Int): Int {
         return when (items[position]) {
-            is FeedItem.ImageTextItem -> VIEW_TYPE_IMAGE_TEXT
-            is FeedItem.VideoItem -> VIEW_TYPE_VIDEO
+            is FeedItem.ImageTextItem -> 0
+            is FeedItem.VideoItem -> 1
         }
     }
 
@@ -23,15 +23,16 @@ class FeedAdapter : RecyclerView.Adapter<ItemViewHolder>() {
         val inflater = LayoutInflater.from(parent.context)
 
         return when (viewType) {
-            VIEW_TYPE_IMAGE_TEXT -> {
+            0 -> {
                 val view = inflater.inflate(R.layout.image_text_item_layout, parent, false)
                 ImageTextViewHolder(view)
             }
 
-//            VIEW_TYPE_VIDEO -> {
-//                val view = inflater.inflate(R.layout.video_item_layout, parent, false)
-//                VideoViewHolder(view)
-//            }
+            //暂时用图文layout
+            1 -> {
+                val view = inflater.inflate(R.layout.image_text_item_layout, parent, false)
+                ImageTextViewHolder(view)
+            }
 
             else -> throw IllegalArgumentException("未知的视图类型: $viewType")
         }
@@ -49,8 +50,4 @@ class FeedAdapter : RecyclerView.Adapter<ItemViewHolder>() {
         notifyDataSetChanged()
     }
 
-    companion object {
-        private const val VIEW_TYPE_IMAGE_TEXT = 0
-        private const val VIEW_TYPE_VIDEO = 1
-    }
 }
