@@ -63,7 +63,7 @@ class HomePageActivity : AppCompatActivity() {
                         if (!isLoading && !isLastPage) {
                             if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount 
                                 && firstVisibleItemPosition >= 0
-                                && totalItemCount >= 5) { // 滑过5个item就加载更多
+                                && totalItemCount >= 4) { // 滑过4个item就加载更多
                                 loadMoreData()
                             }
                         }
