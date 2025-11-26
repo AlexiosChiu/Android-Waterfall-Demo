@@ -12,7 +12,9 @@ import com.example.waterfall.data.FeedItem
 class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
     private val avatar: ImageView = view.findViewById(R.id.avatar)
     private val authorName: TextView = view.findViewById(R.id.author_name)
-    private val content: TextView = view.findViewById(R.id.post_content)
+    private val title: TextView = view.findViewById(R.id.post_title)
+
+    private val likes: TextView = view.findViewById(R.id.likes)
     private val coverImage: ImageView = view.findViewById(R.id.cover_image)
 
     private val likeButton: ImageButton = view.findViewById(R.id.likeButton)
@@ -22,7 +24,9 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
         if (item is FeedItem.ImageTextItem) {
             // 设置基本信息
             authorName.text = item.authorName
-            content.text = item.content
+            title.text = item.title + "，" + item.content
+            likes.text = item.likes.toString()
+
 
             // 加载头像
             Glide.with(avatar.context)
