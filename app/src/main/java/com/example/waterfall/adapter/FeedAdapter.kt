@@ -7,6 +7,7 @@ import com.example.waterfall.R
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.holder.ImageTextViewHolder
 import com.example.waterfall.holder.ItemViewHolder
+import com.example.waterfall.holder.VideoViewHolder
 
 class FeedAdapter : RecyclerView.Adapter<ItemViewHolder>() {
 
@@ -31,7 +32,7 @@ class FeedAdapter : RecyclerView.Adapter<ItemViewHolder>() {
             //暂时用图文layout
             1 -> {
                 val view = inflater.inflate(R.layout.image_text_item_layout, parent, false)
-                ImageTextViewHolder(view)
+                VideoViewHolder(view)
             }
 
             else -> throw IllegalArgumentException("未知的视图类型: $viewType")

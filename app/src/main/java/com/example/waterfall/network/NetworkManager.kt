@@ -1,5 +1,6 @@
 package com.example.waterfall.network
 
+import android.util.Log
 import com.example.waterfall.data.ResponseDTO
 import com.google.gson.Gson
 import okhttp3.Call
@@ -41,6 +42,7 @@ class NetworkManager {
     ) {
         // 构建URL，添加count参数
         val url = "$baseUrl/?count=$count&accept_video=$accept_video"
+        Log.d("NetworkManager", "getPostList: $url")
 
         // 创建请求
         val request = Request.Builder()
@@ -79,52 +81,6 @@ class NetworkManager {
         })
     }
 
-    /*
-    /**
-     * 带分页的获取帖子列表
-     */
-    fun getPostListWithPagination(
-        count: Int,
-        lastPostId: String? = null,
-        callback: ApiCallback<ResponseDTO.ApiResponse>
-    ) {
-        val url = if (lastPostId != null) {
-            "$baseUrl/posts?count=$count&last_id=$lastPostId"
-        } else {
-            "$baseUrl/posts?count=$count"
-        }
-
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                callback.onFailure("网络请求失败: ${e.message}")
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    val responseBody = response.body?.string()
-                    if (response.isSuccessful && responseBody != null) {
-                        val apiResponse =
-                            gson.fromJson(responseBody, ResponseDTO.ApiResponse::class.java)
-                        if (apiResponse.statusCode == 0) {
-                            callback.onSuccess(apiResponse)
-                        } else {
-                            callback.onFailure("服务器返回错误: ${apiResponse.statusCode}")
-                        }
-                    } else {
-                        callback.onFailure("请求失败，状态码: ${response.code}")
-                    }
-                } catch (e: Exception) {
-                    callback.onFailure("数据解析失败: ${e.message}")
-                }
-            }
-        })
-    }
-    */
 
 }
 

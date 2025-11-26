@@ -63,7 +63,7 @@ class HomePageActivity : AppCompatActivity() {
                         if (!isLoading && !isLastPage) {
                             if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount 
                                 && firstVisibleItemPosition >= 0
-                                && totalItemCount >= 10) { // 至少有10个item才触发加载更多
+                                && totalItemCount >= 5) { // 滑过5个item就加载更多
                                 loadMoreData()
                             }
                         }
@@ -79,19 +79,16 @@ class HomePageActivity : AppCompatActivity() {
             viewModel.uiState.collectLatest { state ->
                 when (state) {
                     is HomeUiState.Loading -> {
-                        showLoading(true)
                         isLoading = true
                     }
 
                     is HomeUiState.Success -> {
-                        showLoading(false)
                         isLoading = false
                         isLastPage = !viewModel.hasMore // 根据ViewModel的hasMore状态判断是否还有更多数据
                         updateAdapterData(state.posts)
                     }
 
                     is HomeUiState.Error -> {
-                        showLoading(false)
                         isLoading = false
                         showError(state.message)
                     }
@@ -173,15 +170,6 @@ class HomePageActivity : AppCompatActivity() {
         swipeRefreshLayout.setOnRefreshListener {
             viewModel.refreshPosts(10)
             swipeRefreshLayout.isRefreshing = false
-        }
-    }
-
-    private fun showLoading(isLoading: Boolean) {
-        // 加载状态处理
-        if (isLoading) {
-            // 可以显示加载动画
-        } else {
-            // 隐藏加载动画
         }
     }
 

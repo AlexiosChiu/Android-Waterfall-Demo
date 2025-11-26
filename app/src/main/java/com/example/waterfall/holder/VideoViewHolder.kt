@@ -10,18 +10,18 @@ import com.example.waterfall.data.FeedItem
 
 class VideoViewHolder(private val view: View) : ItemViewHolder(view) {
 
-    private val avatar: ImageView = view.findViewById(R.id.iv_avatar)
-    private val authorName: TextView = view.findViewById(R.id.tv_author_name)
-    private val content: TextView = view.findViewById(R.id.tv_content)
-    private val videoCover: ImageView = view.findViewById(R.id.iv_video_cover)
-    private val duration: TextView = view.findViewById(R.id.tv_duration)
-    private val playButton: ImageButton = view.findViewById(R.id.btn_play)
+    private val avatar: ImageView = view.findViewById(R.id.avatar)
+    private val authorName: TextView = view.findViewById(R.id.author_name)
+    private val title: TextView = view.findViewById(R.id.post_title)
+    private val videoCover: ImageView = view.findViewById(R.id.cover_image)
+//    private val duration: TextView = view.findViewById(R.id.tv_duration)
+//    private val playButton: ImageButton = view.findViewById(R.id.btn_play)
 
     override fun bind(item: FeedItem) {
         if (item is FeedItem.VideoItem) {
             authorName.text = item.authorName
-            content.text = item.content
-            duration.text = item.duration
+            title.text = item.content
+//            duration.text = item.duration
 
             // 加载头像和视频封面
             Glide.with(avatar.context)
@@ -34,10 +34,10 @@ class VideoViewHolder(private val view: View) : ItemViewHolder(view) {
                 .into(videoCover)
 
             // 设置播放按钮点击事件
-            playButton.setOnClickListener {
-                // 这里处理视频播放逻辑
-                playVideo(item.videoUrl)
-            }
+//            playButton.setOnClickListener {
+//                // 这里处理视频播放逻辑
+//                playVideo(item.videoUrl)
+//            }
         }
     }
 
