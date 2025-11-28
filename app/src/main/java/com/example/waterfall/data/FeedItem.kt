@@ -9,6 +9,8 @@ sealed class FeedItem {
         val title: String,       // 标题
         val content: String,     // 内容
         val coverImage: String, // 图片地址
+        val coverHeight: Int,    // 封面高度
+        val coverWidth: Int,     // 封面宽度
         val likes: Int,          // 点赞数
         val comments: Int        // 评论数
     ) : FeedItem()

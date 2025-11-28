@@ -45,25 +45,27 @@ class HomePageActivity : AppCompatActivity() {
         recyclerView.apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL)
             adapter = this@HomePageActivity.adapter
-            
+
             // 添加滚动监听器
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     super.onScrolled(recyclerView, dx, dy)
-                    
+
                     val layoutManager = recyclerView.layoutManager as StaggeredGridLayoutManager
                     val visibleItemCount = layoutManager.childCount
                     val totalItemCount = layoutManager.itemCount
-                    val firstVisibleItemPositions = layoutManager.findFirstVisibleItemPositions(null)
-                    
+                    val firstVisibleItemPositions =
+                        layoutManager.findFirstVisibleItemPositions(null)
+
                     if (firstVisibleItemPositions.isNotEmpty()) {
                         val firstVisibleItemPosition = firstVisibleItemPositions.minOrNull() ?: 0
-                        
+
                         // 检查是否滑动到底部
                         if (!isLoading && !isLastPage) {
-                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount 
+                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount
                                 && firstVisibleItemPosition >= 0
-                                && totalItemCount >= 4) { // 滑过4个item就加载更多
+                                && totalItemCount >= 4
+                            ) { // 滑过4个item就加载更多
                                 loadMoreData()
                             }
                         }
@@ -126,6 +128,8 @@ class HomePageActivity : AppCompatActivity() {
                         title = post.title,
                         content = post.content,
                         coverImage = firstClip.url, // 使用第一张图片作为封面
+                        coverHeight = firstClip.height, // 封面高度
+                        coverWidth = firstClip.width,  // 封面宽度
                         likes = 0,
                         comments = 0
                     )
@@ -155,6 +159,8 @@ class HomePageActivity : AppCompatActivity() {
                         title = post.title,
                         content = post.content,
                         coverImage = firstClip.url,
+                        coverHeight = firstClip.height,
+                        coverWidth = firstClip.width,
                         likes = 0,
                         comments = 0
                     )
