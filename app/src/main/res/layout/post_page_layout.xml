@@ -61,10 +61,10 @@
         <ImageView
             android:id="@+id/subscribe_icon"
             android:layout_width="65dp"
-            android:layout_height="28dp"
+            android:layout_height="29dp"
             android:layout_marginTop="4dp"
             android:layout_weight="0"
-            android:scaleType="centerCrop"
+            android:scaleType="centerInside"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:srcCompat="@drawable/subscribe_icon" />
@@ -207,21 +207,63 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/top_bar">
 
-        <LinearLayout
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
             <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/view_pager_post_page"
                 android:layout_width="match_parent"
-                android:layout_height="320dp" />
+                android:layout_height="320dp"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
-                android:id="@+id/textView"
+                android:id="@+id/title_post_page"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:text="TextView" />
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/pingfang_medium"
+                android:paddingLeft="10dp"
+                android:paddingTop="10dp"
+                android:paddingRight="10dp"
+                android:text="Title"
+                android:textColor="@color/text_black"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/view_pager_post_page" />
 
-        </LinearLayout>
+            <TextView
+                android:id="@+id/content_post_page"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="@font/pingfang_medium"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:text="Content"
+                android:textAlignment="textStart"
+                android:textColor="@color/text_black"
+                android:textSize="16sp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/title_post_page" />
+
+            <TextView
+                android:id="@+id/post_time_post_page"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:alpha="@dimen/post_time_alpha"
+                android:fontFamily="@font/pingfang_medium"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:text="PostTime"
+                android:textColor="@color/text_black"
+                android:textSize="12sp"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/content_post_page" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.constraintlayout.widget.ConstraintLayout>

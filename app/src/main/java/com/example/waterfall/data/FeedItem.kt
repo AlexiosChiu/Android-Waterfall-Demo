@@ -1,7 +1,12 @@
 package com.example.waterfall.data
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+
 sealed class FeedItem {
 
+    @Parcelize
     data class ImageTextItem(
         val id: String,
         val avatar: String,      // 作者头像
@@ -13,7 +18,7 @@ sealed class FeedItem {
         val coverWidth: Int,     // 封面宽度
         val likes: Int,          // 点赞数
         val comments: Int        // 评论数
-    ) : FeedItem()
+    ) : FeedItem(), Parcelable
 
     data class VideoItem(
         val id: String,

@@ -29,7 +29,7 @@ class HomePageViewModel : ViewModel() {
     fun loadPosts(count: Int = 10) {
         _uiState.value = HomeUiState.Loading
         NetworkManager.getInstance()
-            .getPostList(count, true, object : ApiCallback<ResponseDTO.ApiResponse> {
+            .getPostList(count, false, object : ApiCallback<ResponseDTO.ApiResponse> {
                 override fun onSuccess(data: ResponseDTO.ApiResponse) {
                     viewModelScope.launch {
                         _postList.clear()
@@ -48,7 +48,7 @@ class HomePageViewModel : ViewModel() {
     }
 
     /**
-     * 加载更多帖子（分页）
+     * 加载更多帖子
      */
     fun loadMorePosts(count: Int = 10) {
         if (!hasMore || isLoadingMore) return

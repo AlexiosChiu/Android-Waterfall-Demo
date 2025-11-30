@@ -1,6 +1,7 @@
 package com.example.waterfall.holder
 
 import android.content.Context
+import android.content.Intent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -10,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CenterCrop
 import com.example.waterfall.R
+import com.example.waterfall.activity.PostPageActivity
 import com.example.waterfall.data.FeedItem
 
 class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
@@ -27,20 +29,16 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
         if (item is FeedItem.ImageTextItem) {
             // 设置基本信息
             authorName.text = item.authorName
-            title.text = item.title + "，" + item.content
+            title.text = item.title
             likes.text = item.likes.toString()
 
 
             // 加载头像
-            Glide.with(avatar.context)
-                .load(item.avatar)
-                .circleCrop()
-                .into(avatar)
+            Glide.with(avatar.context).load(item.avatar).circleCrop().into(avatar)
 
             // 动态设置图片高度
             val (columnWidth, targetHeight) = calculateOptimalSize(
-                item.coverWidth,
-                item.coverHeight
+                item.coverWidth, item.coverHeight
             )
 
             // 设置 ImageView 尺寸
@@ -56,7 +54,7 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
             setupInteractionButtons(item)
 
             // 设置整个卡片的点击事件
-//            setupClickListeners(item)
+            setupClickListeners(item)
         }
     }
 
@@ -83,9 +81,7 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
     }
 
     private fun loadImageWithOptimalCrop(imageUrl: String, width: Int, height: Int) {
-        Glide.with(coverImage.context)
-            .load(imageUrl)
-            .override(width, height)  // 指定目标尺寸
+        Glide.with(coverImage.context).load(imageUrl).override(width, height)  // 指定目标尺寸
             .transform(CenterCrop())  // 居中裁剪
             .into(coverImage)
     }
@@ -105,22 +101,16 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
 
     }
 
-//    private fun setupClickListeners(item: FeedItem.ImageTextItem) {
-//        // 整个卡片点击跳转到详情页
-//        view.setOnClickListener {
-//            val intent = Intent(view.context, PostDetailActivity::class.java).apply {
-//                putExtra("POST_ID", item.id)
-//            }
-//            view.context.startActivity(intent)
-//        }
-//
-//        // 封面图片点击也可以跳转
-//        coverImage.setOnClickListener {
-//            val intent = Intent(view.context, PostDetailActivity::class.java).apply {
-//                putExtra("POST_ID", item.id)
-//            }
-//            view.context.startActivity(intent)
-//        }
-//    }
+    private fun setupClickListeners(item: FeedItem.ImageTextItem) {
+        // 整个卡片点击跳转到详情页
+        view.setOnClickListener {
+            val intent = Intent(view.context, PostPageActivity::class.java).apply {
+                putExtra("POST_ITEM", item)
+            }
+            view.context.startActivity(intent)
+        }
+
+
+    }
 
 }

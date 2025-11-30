@@ -37,7 +37,7 @@ class NetworkManager {
      */
     fun getPostList(
         count: Int,
-        accept_video: Boolean = true,
+        accept_video: Boolean = false,
         callback: ApiCallback<ResponseDTO.ApiResponse>
     ) {
         // 构建URL，添加count参数

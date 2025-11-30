@@ -33,21 +33,9 @@ class VideoViewHolder(private val view: View) : ItemViewHolder(view) {
                 .load(item.coverImage)
                 .into(videoCover)
 
-            // 设置播放按钮点击事件
-//            playButton.setOnClickListener {
-//                // 这里处理视频播放逻辑
-//                playVideo(item.videoUrl)
-//            }
+
         }
     }
 
-    private fun playVideo(videoUrl: String) {
-        // 视频播放逻辑（后续可以集成ExoPlayer）
-        // 暂时用Toast提示
-        android.widget.Toast.makeText(
-            view.context,
-            "播放视频: $videoUrl",
-            android.widget.Toast.LENGTH_SHORT
-        ).show()
-    }
+
 }

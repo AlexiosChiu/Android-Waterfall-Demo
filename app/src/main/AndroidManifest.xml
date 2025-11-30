@@ -14,6 +14,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Waterfall">
         <activity
+            android:name=".activity.PostPageActivity"
+            android:exported="false" />
+        <activity
             android:name=".activity.BaseActivity"
             android:exported="false" />
         <activity
