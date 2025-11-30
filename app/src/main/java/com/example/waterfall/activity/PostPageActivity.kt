@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.waterfall.R
+import com.example.waterfall.adapter.PostPageViewPagerAdapter
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.view_model.PostPageUiState
 import com.example.waterfall.view_model.PostPageViewModel
@@ -16,6 +17,8 @@ import kotlinx.coroutines.launch
 class PostPageActivity : AppCompatActivity() {
 
     private val viewModel: PostPageViewModel by viewModels()
+
+    private lateinit var postItem: FeedItem.ImageTextItem
 
     // UI组件
     private lateinit var backButton: ImageView
@@ -29,13 +32,11 @@ class PostPageActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.post_page_layout)
-
+        postItem = intent.getParcelableExtra("POST_ITEM") ?: return
         initViews()
         setupObservers()
         setupBackButton()
 
-        // 从Intent获取数据并传递给ViewModel
-        val postItem = intent.getParcelableExtra<FeedItem.ImageTextItem>("POST_ITEM") ?: return
         viewModel.setPostData(postItem)
     }
 
@@ -52,6 +53,12 @@ class PostPageActivity : AppCompatActivity() {
         likeButton.setOnClickListener {
             viewModel.likePost()
         }
+
+        // 初始化ViewPager
+        val viewPager =
+            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.view_pager_post_page)
+        val adapter = PostPageViewPagerAdapter(postItem.images)
+        viewPager.adapter = adapter
     }
 
     private fun setupObservers() {

@@ -138,6 +138,7 @@ class HomeFragment : Fragment() {
                         authorName = post.author.nickname,
                         title = post.title,
                         content = post.content,
+                        images = post.clips.map { it.url }, // 图片列表
                         coverImage = firstClip.url, // 使用第一张图片作为封面
                         coverHeight = firstClip.height, // 封面高度
                         coverWidth = firstClip.width,  // 封面宽度
@@ -169,6 +170,7 @@ class HomeFragment : Fragment() {
                         authorName = post.author.nickname,
                         title = post.title,
                         content = post.content,
+                        images = post.clips.map { it.url },
                         coverImage = firstClip.url,
                         coverHeight = firstClip.height,
                         coverWidth = firstClip.width,
