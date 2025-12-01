@@ -1,6 +1,7 @@
 package com.example.waterfall.activity
 
 import android.os.Bundle
+import android.util.DisplayMetrics
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.viewModels
@@ -19,6 +20,7 @@ class PostPageActivity : AppCompatActivity() {
     private val viewModel: PostPageViewModel by viewModels()
 
     private lateinit var postItem: FeedItem.ImageTextItem
+    private lateinit var viewPager: androidx.viewpager2.widget.ViewPager2
 
     // UI组件
     private lateinit var backButton: ImageView
@@ -54,11 +56,33 @@ class PostPageActivity : AppCompatActivity() {
             viewModel.likePost()
         }
 
-        // 初始化ViewPager
-        val viewPager =
+        // 初始化ViewPager - 根据最长图片动态调整高度
+        viewPager =
             findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.view_pager_post_page)
-        val adapter = PostPageViewPagerAdapter(postItem.images)
+        val adapter = PostPageViewPagerAdapter(postItem.images) { maxHeight ->
+            adjustViewPagerHeight(maxHeight)
+        }
         viewPager.adapter = adapter
+    }
+
+    private fun adjustViewPagerHeight(maxHeight: Int) {
+        if (maxHeight <= 0) return
+
+        val displayMetrics = DisplayMetrics()
+        windowManager.defaultDisplay.getMetrics(displayMetrics)
+        
+        // 限制最大高度（例如屏幕高度的80%）
+        val maxAllowedHeight = (displayMetrics.heightPixels * 0.8).toInt()
+        val finalHeight = minOf(maxHeight, maxAllowedHeight)
+
+        // 设置最小高度（例如200dp）
+        val minHeight = (200 * displayMetrics.density).toInt()
+        val adjustedHeight = maxOf(finalHeight, minHeight)
+
+        // 更新ViewPager的高度
+        val layoutParams = viewPager.layoutParams
+        layoutParams.height = adjustedHeight
+        viewPager.layoutParams = layoutParams
     }
 
     private fun setupObservers() {
