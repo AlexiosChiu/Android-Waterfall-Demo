@@ -50,12 +50,20 @@ class HomeFragment : Fragment() {
     private fun setupRecyclerView(view: View) {
         recyclerView = view.findViewById(R.id.recyclerView)
         adapter = FeedAdapter()
+        adapter.setHasStableIds(true)
 
         recyclerView.apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL)
             adapter = this@HomeFragment.adapter
-            itemAnimator = null
-            (layoutManager as StaggeredGridLayoutManager).gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_NONE
+            // 使用默认动画但关闭 change 动画，避免视觉上列间交换的抖动
+            itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {
+                setSupportsChangeAnimations(false)
+            }
+
+            // 允许自动移动跨列项，避免出现空隙
+            (layoutManager as StaggeredGridLayoutManager).gapStrategy =
+                StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
+
 
             // 添加滚动监听器
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -138,10 +146,15 @@ class HomeFragment : Fragment() {
                 coverHeight = firstClip.height, // 封面高度
                 coverWidth = firstClip.width,  // 封面宽度
                 likes = 0,
+                liked = false, // 是否点赞
                 createTime = post.createTime
             )
         }
         adapter.submitList(feedItems)
+        // submitList 之后强制重新分配 span，确保列布局正确
+        recyclerView.post {
+            (recyclerView.layoutManager as? StaggeredGridLayoutManager)?.invalidateSpanAssignments()
+        }
     }
 
     // 刷新功能
