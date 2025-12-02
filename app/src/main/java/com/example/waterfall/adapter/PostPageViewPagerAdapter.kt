@@ -10,10 +10,8 @@ import com.bumptech.glide.request.RequestOptions
 import com.example.waterfall.R
 
 class PostPageViewPagerAdapter(
-    private val images: List<String>,
-    private val onMaxImageSizeMeasured: (maxHeight: Int) -> Unit
-) :
-    RecyclerView.Adapter<PostPageViewPagerAdapter.ImageViewHolder>() {
+    private val images: List<String>, private val onMaxImageSizeMeasured: (maxHeight: Int) -> Unit
+) : RecyclerView.Adapter<PostPageViewPagerAdapter.ImageViewHolder>() {
 
     private var maxHeight = 0
     private var loadedCount = 0
@@ -32,9 +30,8 @@ class PostPageViewPagerAdapter(
     override fun onBindViewHolder(holder: ImageViewHolder, position: Int) {
         val currentPosition = holder.adapterPosition
         if (currentPosition == RecyclerView.NO_POSITION) return
-        
-        Glide.with(holder.itemView.context)
-            .load(images[currentPosition])
+
+        Glide.with(holder.itemView.context).load(images[currentPosition])
             .apply(RequestOptions().override(1000, 1000)) // 限制最大尺寸
             .listener(object :
                 com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
@@ -58,19 +55,19 @@ class PostPageViewPagerAdapter(
                 ): Boolean {
                     val adapterPosition = holder.adapterPosition
                     if (adapterPosition == RecyclerView.NO_POSITION) return false
-                    
+
                     resource?.let { drawable ->
                         val width = drawable.intrinsicWidth
                         val height = drawable.intrinsicHeight
                         if (width > 0 && height > 0) {
                             imageSizes[adapterPosition] = Pair(width, height)
-                            
+
                             // 计算基于屏幕宽度的等比高度
                             val displayMetrics = holder.itemView.context.resources.displayMetrics
                             val screenWidth = displayMetrics.widthPixels
                             val aspectRatio = height.toFloat() / width.toFloat()
                             val calculatedHeight = (screenWidth * aspectRatio).toInt()
-                            
+
                             // 更新最大高度
                             if (calculatedHeight > maxHeight) {
                                 maxHeight = calculatedHeight
@@ -81,8 +78,7 @@ class PostPageViewPagerAdapter(
                     checkAllImagesLoaded()
                     return false
                 }
-            })
-            .into(holder.imageView)
+            }).into(holder.imageView)
     }
 
     private fun checkAllImagesLoaded() {

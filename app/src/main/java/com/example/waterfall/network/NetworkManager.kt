@@ -26,7 +26,7 @@ class NetworkManager {
     private val client = OkHttpClient()
     private val gson = Gson()
 
-    // 基础URL - 替换成你的实际URL
+    // 基础URL
     private val baseUrl = "https://college-training-camp.bytedance.com/feed"
 
     /**

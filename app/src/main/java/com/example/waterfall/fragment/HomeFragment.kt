@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment() {
-    
+
     private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: FeedAdapter
@@ -33,9 +33,7 @@ class HomeFragment : Fragment() {
     private var isLastPage = false
 
     override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.home_page_layout, container, false)
         setupViews(view)
@@ -56,6 +54,8 @@ class HomeFragment : Fragment() {
         recyclerView.apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL)
             adapter = this@HomeFragment.adapter
+            itemAnimator = null
+            (layoutManager as StaggeredGridLayoutManager).gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_NONE
 
             // 添加滚动监听器
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -73,10 +73,7 @@ class HomeFragment : Fragment() {
 
                         // 检查是否滑动到底部
                         if (!isLoading && !isLastPage) {
-                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount
-                                && firstVisibleItemPosition >= 0
-                                && totalItemCount >= 4
-                            ) { // 滑过4个item就加载更多
+                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount && firstVisibleItemPosition >= 0 && totalItemCount >= 4) { // 滑过4个item就加载更多
                                 loadMoreData()
                             }
                         }
@@ -130,55 +127,19 @@ class HomeFragment : Fragment() {
 
             val firstClip = post.clips.first()
 
-            when (firstClip.type) {
-                0 -> { // 图片帖子
-                    FeedItem.ImageTextItem(
-                        id = post.postId,
-                        avatar = post.author.avatar,
-                        authorName = post.author.nickname,
-                        title = post.title,
-                        content = post.content,
-                        images = post.clips.map { it.url }, // 图片列表
-                        coverImage = firstClip.url, // 使用第一张图片作为封面
-                        coverHeight = firstClip.height, // 封面高度
-                        coverWidth = firstClip.width,  // 封面宽度
-                        likes = 0,
-                        comments = 0
-                    )
-                }
-
-                1 -> { // 视频帖子
-                    FeedItem.VideoItem(
-                        id = post.postId,
-                        avatar = post.author.avatar,
-                        authorName = post.author.nickname,
-                        title = post.title,
-                        content = post.content,
-                        videoUrl = firstClip.url,    // 视频地址
-                        coverImage = firstClip.url,  // 视频封面（使用视频地址作为封面）
-                        likes = 0,
-                        comments = 0,
-                        duration = "00:00" // 默认时长，可以根据实际数据调整
-                    )
-                }
-
-                else -> {
-                    // 未知类型，创建默认的图文帖子
-                    FeedItem.ImageTextItem(
-                        id = post.postId,
-                        avatar = post.author.avatar,
-                        authorName = post.author.nickname,
-                        title = post.title,
-                        content = post.content,
-                        images = post.clips.map { it.url },
-                        coverImage = firstClip.url,
-                        coverHeight = firstClip.height,
-                        coverWidth = firstClip.width,
-                        likes = 0,
-                        comments = 0
-                    )
-                }
-            }
+            FeedItem.ImageTextItem(
+                id = post.postId,
+                avatar = post.author.avatar,
+                authorName = post.author.nickname,
+                title = post.title,
+                content = post.content,
+                images = post.clips.map { it.url }, // 图片列表
+                coverImage = firstClip.url, // 使用第一张图片作为封面
+                coverHeight = firstClip.height, // 封面高度
+                coverWidth = firstClip.width,  // 封面宽度
+                likes = 0,
+                createTime = post.createTime
+            )
         }
         adapter.submitList(feedItems)
     }
@@ -194,6 +155,7 @@ class HomeFragment : Fragment() {
 
     private fun showError(message: String) {
         // Fragment中使用requireContext()获取Context
-        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT)
+            .show()
     }
 }

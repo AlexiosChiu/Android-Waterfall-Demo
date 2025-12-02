@@ -17,7 +17,6 @@ class HomePageViewModel : ViewModel() {
 
     // 帖子列表数据
     private val _postList = mutableListOf<ResponseDTO.Post>()
-    val postList: List<ResponseDTO.Post> get() = _postList
 
     // 是否还有更多数据
     var hasMore = true
@@ -54,7 +53,6 @@ class HomePageViewModel : ViewModel() {
         if (!hasMore || isLoadingMore) return
         
         isLoadingMore = true
-        val lastPostId = _postList.lastOrNull()?.postId
 
         NetworkManager.getInstance()
             .getPostList(count, true, object : ApiCallback<ResponseDTO.ApiResponse> {
