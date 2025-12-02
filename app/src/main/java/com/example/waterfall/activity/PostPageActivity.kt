@@ -28,6 +28,7 @@ class PostPageActivity : AppCompatActivity() {
     private lateinit var authorName: TextView
     private lateinit var title: TextView
     private lateinit var content: TextView
+    private lateinit var postTime: TextView
     private lateinit var likes: TextView
     private lateinit var likeButton: ImageView
 
@@ -48,6 +49,7 @@ class PostPageActivity : AppCompatActivity() {
         authorName = findViewById(R.id.author_name_post_page)
         title = findViewById(R.id.title_post_page)
         content = findViewById(R.id.content_post_page)
+        postTime = findViewById(R.id.post_time_post_page)
         likes = findViewById(R.id.like_count)
         likeButton = findViewById(R.id.like_icon)
 
@@ -57,8 +59,7 @@ class PostPageActivity : AppCompatActivity() {
         }
 
         // 初始化ViewPager - 根据最长图片动态调整高度
-        viewPager =
-            findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.view_pager_post_page)
+        viewPager = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.view_pager_post_page)
         val adapter = PostPageViewPagerAdapter(postItem.images) { maxHeight ->
             adjustViewPagerHeight(maxHeight)
         }
@@ -70,7 +71,7 @@ class PostPageActivity : AppCompatActivity() {
 
         val displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
-        
+
         // 限制最大高度（例如屏幕高度的80%）
         val maxAllowedHeight = (displayMetrics.heightPixels * 0.8).toInt()
         val finalHeight = minOf(maxHeight, maxAllowedHeight)
@@ -117,12 +118,44 @@ class PostPageActivity : AppCompatActivity() {
         authorName.text = postItem.authorName
         title.text = postItem.title
         content.text = postItem.content
+        postTime.text = getPostTimeText(postItem.createTime)
         likes.text = postItem.likes.toString()
 
         // 加载头像
         Glide.with(this).load(postItem.avatar).circleCrop().into(avatar)
 
 
+    }
+
+    private fun getPostTimeText(createTime: Long): String {
+        val time = createTime / 1000
+        val currentTime = System.currentTimeMillis() / 1000
+        val diff = currentTime - time
+        val diffDays = diff / 86400
+        val nowCal = java.util.Calendar.getInstance()
+        val postCal = java.util.Calendar.getInstance().apply { timeInMillis = createTime }
+
+        when {
+            // 同一天：显示 HH:mm
+            nowCal.get(java.util.Calendar.YEAR) == postCal.get(java.util.Calendar.YEAR) && nowCal.get(
+                java.util.Calendar.DAY_OF_YEAR
+            ) == postCal.get(java.util.Calendar.DAY_OF_YEAR) -> {
+                val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                return fmt.format(java.util.Date(createTime))
+            }
+            // 昨天：显示 "昨天 HH:mm"
+            diffDays == 1L -> {
+                val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                return "昨天 ${fmt.format(java.util.Date(createTime))}"
+            }
+            // 七天内：显示 x 天前
+            diffDays in 2..6 -> return "${diffDays}天前"
+            // 其余：显示 MM-dd
+            else -> {
+                val fmt = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
+                return fmt.format(java.util.Date(createTime))
+            }
+        }
     }
 
     private fun setupBackButton() {
