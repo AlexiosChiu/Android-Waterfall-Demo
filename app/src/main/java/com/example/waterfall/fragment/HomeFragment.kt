@@ -53,16 +53,20 @@ class HomeFragment : Fragment() {
         adapter.setHasStableIds(true)
 
         recyclerView.apply {
-            layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL)
-            adapter = this@HomeFragment.adapter
-            // 使用默认动画但关闭 change 动画，避免视觉上列间交换的抖动
-            itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {
-                setSupportsChangeAnimations(false)
-            }
+            layoutManager =
+                StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL).apply {
+                    gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_NONE
+                }
 
-            // 允许自动移动跨列项，避免出现空隙
-            (layoutManager as StaggeredGridLayoutManager).gapStrategy =
-                StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
+            setItemViewCacheSize(20)
+
+            adapter = this@HomeFragment.adapter
+
+            // 永久禁用所有 RecyclerView 的 item 动画
+            itemAnimator = null
+
+            // 如果 RecyclerView 的父容器存在 LayoutTransition，也清除，避免布局变更动画
+            (parent as? ViewGroup)?.layoutTransition = null
 
 
             // 添加滚动监听器
@@ -104,10 +108,17 @@ class HomeFragment : Fragment() {
                         isLoading = false
                         isLastPage = !viewModel.hasMore // 根据ViewModel的hasMore状态判断是否还有更多数据
                         updateAdapterData(state.posts)
+                        // 下拉刷新成功后滚动到顶部
+                        if (swipeRefreshLayout.isRefreshing) {
+                            scrollToTop()
+                            swipeRefreshLayout.isRefreshing = false
+                        }
                     }
 
                     is HomeUiState.Error -> {
                         isLoading = false
+                        // 错误时也停止刷新动画
+                        swipeRefreshLayout.isRefreshing = false
                         showError(state.message)
                     }
                 }
@@ -126,48 +137,76 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateAdapterData(posts: List<ResponseDTO.Post>) {
-        // 将 Post 数据转换为 FeedItem
-        val feedItems = posts.mapNotNull { post ->
-            // 安全检查 clips 是否为 null 或空
-            if (post.clips.isNullOrEmpty()) {
-                return@mapNotNull null // 跳过没有媒体内容的帖子
+        // 过滤掉 clips 为 null/空 的帖子并构造 FeedItem 列表
+        val feedItems = posts
+            .asSequence()
+            .filter { !it.clips.isNullOrEmpty() }
+            .map { post ->
+                val firstClip = post.clips!!.first()
+                FeedItem.ImageTextItem(
+                    id = post.postId,
+                    avatar = post.author.avatar,
+                    authorName = post.author.nickname,
+                    title = post.title,
+                    content = post.content,
+                    images = post.clips.map { it.url },
+                    coverImage = firstClip.url,
+                    coverHeight = firstClip.height,
+                    coverWidth = firstClip.width,
+                    likes = 0,
+                    liked = false,
+                    createTime = post.createTime
+                )
             }
+            .toList()
 
-            val firstClip = post.clips.first()
-
-            FeedItem.ImageTextItem(
-                id = post.postId,
-                avatar = post.author.avatar,
-                authorName = post.author.nickname,
-                title = post.title,
-                content = post.content,
-                images = post.clips.map { it.url }, // 图片列表
-                coverImage = firstClip.url, // 使用第一张图片作为封面
-                coverHeight = firstClip.height, // 封面高度
-                coverWidth = firstClip.width,  // 封面宽度
-                likes = 0,
-                liked = false, // 是否点赞
-                createTime = post.createTime
-            )
-        }
+        // 抑制布局期间避免中途重排，提交后重新分配 spans 并请求布局
+        recyclerView.suppressLayout(true)
         adapter.submitList(feedItems)
-        // submitList 之后强制重新分配 span，确保列布局正确
         recyclerView.post {
             (recyclerView.layoutManager as? StaggeredGridLayoutManager)?.invalidateSpanAssignments()
+            recyclerView.requestLayout()
+            recyclerView.suppressLayout(false)
+
+            // 确保在数据更新后停止刷新动画
+            if (swipeRefreshLayout.isRefreshing) {
+                swipeRefreshLayout.isRefreshing = false
+            }
         }
     }
 
     // 刷新功能
     private fun setupSwipeRefresh(view: View) {
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
+        // 设置颜色方案
+        swipeRefreshLayout.setColorSchemeResources(
+            android.R.color.holo_blue_bright,
+            android.R.color.holo_green_light,
+            android.R.color.holo_orange_light,
+            android.R.color.holo_red_light
+        )
+
         swipeRefreshLayout.setOnRefreshListener {
+            // 开始刷新时清除之前的滚动状态
+            recyclerView.stopScroll()
             viewModel.refreshPosts(10)
-            swipeRefreshLayout.isRefreshing = false
+        }
+    }
+
+    private fun scrollToTop() {
+        // 确保在主线程中执行滚动操作
+        recyclerView.post {
+            // 先平滑滚动到顶部
+            recyclerView.smoothScrollToPosition(0)
+
+            // 然后确保SwipeRefreshLayout的状态正确
+            recyclerView.post {
+                swipeRefreshLayout.isRefreshing = false
+            }
         }
     }
 
     private fun showError(message: String) {
-        // Fragment中使用requireContext()获取Context
         android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT)
             .show()
     }
