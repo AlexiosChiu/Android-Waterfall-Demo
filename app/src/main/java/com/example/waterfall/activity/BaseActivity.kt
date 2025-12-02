@@ -29,7 +29,24 @@ class BaseActivity : AppCompatActivity() {
         val navProfile: View = findViewById(R.id.base_bottom_nav_profile)
 
         navHome.setOnClickListener {
-            viewPager.setCurrentItem(0, true)
+            if (viewPager.currentItem == 0) {
+                // 滑动到首页顶部
+                // 尝试找到已附加到 FragmentManager 的 HomeFragment，并滚动到顶部
+                val homeFragment = supportFragmentManager
+                    .fragments
+                    .firstOrNull { it::class.java.simpleName == "HomeFragment" } as? androidx.fragment.app.Fragment
+                homeFragment?.view?.let { v ->
+                    val recycler =
+                        v.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recyclerView)
+                    if (recycler != null) {
+                        recycler.smoothScrollToPosition(0)
+                    } else {
+                        v.scrollTo(0, 0)
+                    }
+                }
+            } else {
+                viewPager.setCurrentItem(0, true)
+            }
         }
         navProfile.setOnClickListener {
             viewPager.setCurrentItem(1, true)

@@ -193,7 +193,7 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun scrollToTop() {
+    fun scrollToTop() {
         // 确保在主线程中执行滚动操作
         recyclerView.post {
             // 先平滑滚动到顶部
