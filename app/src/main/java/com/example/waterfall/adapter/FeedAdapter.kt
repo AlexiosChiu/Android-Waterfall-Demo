@@ -8,6 +8,7 @@ import com.example.waterfall.R
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.holder.ImageTextViewHolder
 import com.example.waterfall.holder.ItemViewHolder
+import kotlin.math.roundToInt
 
 class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
 
@@ -50,13 +51,16 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
         originalHeight: Int,
         targetWidth: Int
     ): Int {
-        if (originalWidth <= 0 || originalHeight <= 0) {
-            return targetWidth
-        }
-        val originalAspectRatio = originalHeight.toFloat() / originalWidth.toFloat()
-        val constrainedAspectRatio = originalAspectRatio.coerceIn(0.75f, 1.333f)
-        return (targetWidth * constrainedAspectRatio).toInt()
+        if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
+
+        val ratio = (originalHeight.toFloat() / originalWidth).coerceIn(
+            0.75f,
+            1.333f
+        ) // 限制高度比例在 0.75 到 1.333 之间
+        return (targetWidth * ratio).roundToInt()
     }
+
+
 }
 
 class FeedDiffCallback : DiffUtil.ItemCallback<FeedItem>() {
