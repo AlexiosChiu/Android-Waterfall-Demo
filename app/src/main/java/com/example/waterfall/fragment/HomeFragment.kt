@@ -16,6 +16,7 @@ import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.ResponseDTO
 import com.example.waterfall.view_model.HomePageViewModel
 import com.example.waterfall.view_model.HomeUiState
+import com.example.waterfall.view_model.RefreshEvent
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -28,9 +29,10 @@ class HomeFragment : Fragment() {
     // 使用 viewModels 委托初始化 ViewModel
     private val viewModel: HomePageViewModel by viewModels()
 
-    // 加载更多相关变量
     private var isLoading = false
     private var isLastPage = false
+    private var shouldScrollToTopAfterRefresh = false
+
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -110,9 +112,8 @@ class HomeFragment : Fragment() {
                         isLastPage = !viewModel.hasMore // 根据ViewModel的hasMore状态判断是否还有更多数据
                         updateAdapterData(state.posts)
                         // 下拉刷新成功后滚动到顶部
-                        if (swipeRefreshLayout.isRefreshing) {
+                        if (swipeRefreshLayout.isRefreshing || shouldScrollToTopAfterRefresh) {
                             scrollToTop()
-                            swipeRefreshLayout.isRefreshing = false
                         }
                     }
 
@@ -120,7 +121,21 @@ class HomeFragment : Fragment() {
                         isLoading = false
                         // 错误时也停止刷新动画
                         swipeRefreshLayout.isRefreshing = false
+                        shouldScrollToTopAfterRefresh = false
                         showError(state.message)
+                    }
+                }
+            }
+        }
+
+        // 观察一次性刷新事件
+        lifecycleScope.launch {
+            viewModel.refreshEvent.collect { event ->
+                if (event is RefreshEvent.ScrollToTopAfterRefresh) {
+                    shouldScrollToTopAfterRefresh = true
+                    // 显示刷新指示器，提供视觉反馈
+                    if (!swipeRefreshLayout.isRefreshing) {
+                        swipeRefreshLayout.isRefreshing = true
                     }
                 }
             }
@@ -168,11 +183,6 @@ class HomeFragment : Fragment() {
             (recyclerView.layoutManager as? StaggeredGridLayoutManager)?.invalidateSpanAssignments()
             recyclerView.requestLayout()
             recyclerView.suppressLayout(false)
-
-            // 确保在数据更新后停止刷新动画
-            if (swipeRefreshLayout.isRefreshing) {
-                swipeRefreshLayout.isRefreshing = false
-            }
         }
     }
 
@@ -198,8 +208,12 @@ class HomeFragment : Fragment() {
             recyclerView.scrollToPosition(0)
 
             // 然后确保SwipeRefreshLayout的状态正确
-            recyclerView.post {
+            if (swipeRefreshLayout.isRefreshing) {
                 swipeRefreshLayout.isRefreshing = false
+            }
+            // 重置标志位
+            if (shouldScrollToTopAfterRefresh) {
+                shouldScrollToTopAfterRefresh = false
             }
         }
     }

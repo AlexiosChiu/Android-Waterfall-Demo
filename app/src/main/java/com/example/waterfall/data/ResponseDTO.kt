@@ -18,7 +18,7 @@ sealed class ResponseDTO {
         @SerializedName("hashtag") val hashtag: List<HashTag>,
         @SerializedName("create_time") val createTime: Long,
         @SerializedName("author") val author: Author,
-        @SerializedName("clips") val clips: List<Clip>,
+        @SerializedName("clips") val clips: List<Clip>?,
         @SerializedName("music") val music: Music
     )
 

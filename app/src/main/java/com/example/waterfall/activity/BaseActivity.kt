@@ -32,28 +32,26 @@ class BaseActivity : AppCompatActivity() {
 
         navHome.setOnClickListener {
             if (viewPager.currentItem == 0) {
-                // 滑动到首页顶部
-                // 尝试找到已附加到 FragmentManager 的 HomeFragment，并滚动到顶部
+                // 尝试找到已附加到 FragmentManager 的 HomeFragment
                 val homeFragment = supportFragmentManager
                     .fragments
-                    .firstOrNull { it is HomeFragment }
+                    .firstOrNull { it is HomeFragment } as? HomeFragment
+
                 homeFragment?.view?.let { v ->
-                    val recycler =
-                        v.findViewById<RecyclerView>(R.id.recyclerView)
+                    val recycler = v.findViewById<RecyclerView>(R.id.recyclerView)
                     if (recycler != null) {
                         if (recycler.computeVerticalScrollOffset() == 0) {
-                            // 页面已经在顶部，则刷新页面
-                            // 尝试从 Fragment 获取已有的 ViewModel
+                            // 页面已经在顶部，则触发刷新并滚动
                             val vm = try {
                                 androidx.lifecycle.ViewModelProvider(homeFragment)[com.example.waterfall.view_model.HomePageViewModel::class.java]
                             } catch (_: Exception) {
                                 null
                             }
-                            vm?.refreshPosts(10)
+                            vm?.refreshAndScrollToTop()
+                        } else {
+                            // 页面不在顶部，平滑滚动到顶部
+                            recycler.smoothScrollToPosition(0)
                         }
-                        recycler.smoothScrollToPosition(0)
-                    } else {
-                        v.scrollTo(0, 0)
                     }
                 }
             } else {
