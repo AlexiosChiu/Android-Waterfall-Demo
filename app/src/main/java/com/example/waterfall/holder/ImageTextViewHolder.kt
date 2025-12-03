@@ -95,56 +95,6 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
             .load(imageUrl)
             .apply(RequestOptions().override(width, height))
             .transform(CenterCrop())
-            .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
-                override fun onLoadFailed(
-                    e: com.bumptech.glide.load.engine.GlideException?,
-                    model: Any?,
-                    target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>?,
-                    isFirstResource: Boolean
-                ): Boolean {
-                    return false
-                }
-
-                override fun onResourceReady(
-                    resource: android.graphics.drawable.Drawable?,
-                    model: Any?,
-                    target: com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable>?,
-                    dataSource: com.bumptech.glide.load.DataSource?,
-                    isFirstResource: Boolean
-                ): Boolean {
-                    // 图片加载完成后，重新设置ImageView的高度并通知RecyclerView更新
-                    resource?.let { drawable ->
-                        val drawableWidth = drawable.intrinsicWidth
-                        val drawableHeight = drawable.intrinsicHeight
-
-                        if (drawableWidth > 0 && drawableHeight > 0) {
-                            val aspectRatio = drawableHeight.toFloat() / drawableWidth.toFloat()
-                            val newHeight = (width * aspectRatio).toInt()
-
-                            // 更新ImageView的高度
-                            coverImage.layoutParams.height = newHeight
-                            coverImage.requestLayout()
-
-                            // 通知StaggeredGridLayoutManager重新测量和布局
-                            view.post {
-                                val recyclerView = view.parent as? RecyclerView
-                                recyclerView?.let { rv ->
-                                    val position = rv.getChildAdapterPosition(view)
-                                    if (position != RecyclerView.NO_POSITION) {
-                                        val layoutParams = view.layoutParams as? StaggeredGridLayoutManager.LayoutParams
-                                        layoutParams?.isFullSpan = false
-                                        view.layoutParams = layoutParams
-
-                                        // 强制刷新该item的布局
-                                        rv.adapter?.notifyItemChanged(position)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return false
-                }
-            })
             .into(coverImage)
     }
 

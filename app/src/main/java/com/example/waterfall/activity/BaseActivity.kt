@@ -3,9 +3,11 @@ package com.example.waterfall.activity
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.example.waterfall.R
 import com.example.waterfall.adapter.BasePageViewPagerAdapter
+import com.example.waterfall.fragment.HomeFragment
 
 private val BaseActivity.viewPager: ViewPager2
     get() = findViewById(R.id.base_bottom_viewpager)
@@ -34,11 +36,21 @@ class BaseActivity : AppCompatActivity() {
                 // 尝试找到已附加到 FragmentManager 的 HomeFragment，并滚动到顶部
                 val homeFragment = supportFragmentManager
                     .fragments
-                    .firstOrNull { it::class.java.simpleName == "HomeFragment" } as? androidx.fragment.app.Fragment
+                    .firstOrNull { it is HomeFragment }
                 homeFragment?.view?.let { v ->
                     val recycler =
-                        v.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recyclerView)
+                        v.findViewById<RecyclerView>(R.id.recyclerView)
                     if (recycler != null) {
+                        if (recycler.computeVerticalScrollOffset() == 0) {
+                            // 页面已经在顶部，则刷新页面
+                            // 尝试从 Fragment 获取已有的 ViewModel
+                            val vm = try {
+                                androidx.lifecycle.ViewModelProvider(homeFragment)[com.example.waterfall.view_model.HomePageViewModel::class.java]
+                            } catch (_: Exception) {
+                                null
+                            }
+                            vm?.refreshPosts(10)
+                        }
                         recycler.smoothScrollToPosition(0)
                     } else {
                         v.scrollTo(0, 0)
