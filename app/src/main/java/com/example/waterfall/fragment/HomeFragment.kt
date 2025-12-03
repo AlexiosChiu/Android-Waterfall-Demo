@@ -55,7 +55,7 @@ class HomeFragment : Fragment() {
         recyclerView.apply {
             layoutManager =
                 StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL).apply {
-                    gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_NONE
+                    gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS // 解决RecyclerView中的空位
                 }
 
             setItemViewCacheSize(20)
@@ -180,10 +180,7 @@ class HomeFragment : Fragment() {
         swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout)
         // 设置颜色方案
         swipeRefreshLayout.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light,
-            android.R.color.holo_orange_light,
-            android.R.color.holo_red_light
+            android.R.color.holo_blue_bright
         )
 
         swipeRefreshLayout.setOnRefreshListener {
@@ -197,7 +194,7 @@ class HomeFragment : Fragment() {
         // 确保在主线程中执行滚动操作
         recyclerView.post {
             // 先平滑滚动到顶部
-            recyclerView.smoothScrollToPosition(0)
+            recyclerView.scrollToPosition(0)
 
             // 然后确保SwipeRefreshLayout的状态正确
             recyclerView.post {
