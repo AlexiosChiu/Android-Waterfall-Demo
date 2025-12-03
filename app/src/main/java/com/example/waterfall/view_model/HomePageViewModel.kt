@@ -61,7 +61,7 @@ class HomePageViewModel : ViewModel() {
         isLoadingMore = true
 
         NetworkManager.getInstance()
-            .getPostList(count, true, object : ApiCallback<ResponseDTO.ApiResponse> {
+            .getPostList(count, false, object : ApiCallback<ResponseDTO.ApiResponse> {
                 override fun onSuccess(data: ResponseDTO.ApiResponse) {
                     viewModelScope.launch {
                         _postList.addAll(data.postList)

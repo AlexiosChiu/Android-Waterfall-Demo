@@ -17,8 +17,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:adjustViewBounds="true"
-            android:scaleType="centerCrop"
-             />
+            android:scaleType="centerCrop" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -30,14 +29,14 @@
                 android:id="@+id/post_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
                 android:fontFamily="@font/pingfang_medium"
+                android:maxLines="2"
                 android:text="帖子内容"
                 android:textAlignment="textStart"
                 android:textColor="@color/text_black"
                 android:textSize="14sp"
-                android:textStyle="bold"
-                android:maxLines="2"
-                android:ellipsize="end" />
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:layout_width="match_parent"

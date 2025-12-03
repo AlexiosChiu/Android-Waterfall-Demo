@@ -8,37 +8,44 @@ import android.view.animation.ScaleAnimation
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toDrawable
 import com.bumptech.glide.Glide
-import com.bumptech.glide.load.resource.bitmap.CenterCrop
+import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.example.waterfall.R
 import com.example.waterfall.activity.PostPageActivity
+import com.example.waterfall.adapter.FeedAdapter
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.LikePreferences
 
-class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
+class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapter) :
+    ItemViewHolder(view) {
     private val avatar: ImageView = view.findViewById(R.id.avatar)
     private val authorName: TextView = view.findViewById(R.id.author_name)
     private val title: TextView = view.findViewById(R.id.post_title)
-
     private val likes: TextView = view.findViewById(R.id.likes)
     private val coverImage: ImageView = view.findViewById(R.id.cover_image)
-
     private val likeButton: ImageButton = view.findViewById(R.id.likeButton)
     private lateinit var prefs: LikePreferences
 
     override fun bind(item: FeedItem) {
         if (item is FeedItem.ImageTextItem) {
-            // 初始化 prefs
             prefs = LikePreferences(view.context)
 
-            // 从持久化读取（以 item 中的值为默认）
+            val targetWidth = adapter.getColumnWidth()
+            if (targetWidth > 0) {
+                val targetHeight = adapter.getCachedHeight(item.id) ?: targetWidth
+                val params =
+                    coverImage.layoutParams ?: ViewGroup.LayoutParams(targetWidth, targetHeight)
+                params.width = targetWidth
+                params.height = targetHeight
+                coverImage.layoutParams = params
+            }
+
             val persistedLikes = prefs.getLikes(item.id, item.likes)
             val persistedLiked = prefs.getLiked(item.id, item.liked)
 
-            // 更新数据模型与界面
             item.likes = persistedLikes
             item.liked = persistedLiked
 
@@ -50,51 +57,36 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
                 if (item.liked) R.drawable.like_icon_red else R.drawable.like_icon
             )
 
-            // 加载头像
             Glide.with(avatar.context).load(item.avatar).circleCrop().into(avatar)
 
-            // 动态设置图片高度
-            val (columnWidth, targetHeight) = calculateOptimalSize(
-                item.coverWidth, item.coverHeight
-            )
-
-            coverImage.layoutParams = coverImage.layoutParams.apply {
-                width = columnWidth
-                height = targetHeight
-            }
-
-            loadImageWithOptimalCrop(item.coverImage, columnWidth, targetHeight, item)
+            loadImage(item.coverClip)
 
             setupInteractionButtons(item)
             setupClickListeners(item)
         }
     }
 
-    private fun calculateOptimalSize(originalWidth: Int, originalHeight: Int): Pair<Int, Int> {
-        val recyclerView = view.parent as? RecyclerView
-        val recyclerWidth =
-            recyclerView?.width ?: coverImage.context.resources.displayMetrics.widthPixels
-
-        val margin = 12.dpToPx(coverImage.context)
-        val columnWidth = (recyclerWidth - margin) / 2
-
-        val originalAspectRatio = if (originalWidth > 0 && originalHeight > 0) {
-            originalHeight.toFloat() / originalWidth.toFloat()
-        } else {
-            1.0f
+    private fun loadImage(imageUrl: String) {
+        if (imageUrl.isBlank()) {
+            coverImage.setImageDrawable(null)
+            coverImage.setBackgroundColor(
+                ContextCompat.getColor(coverImage.context, android.R.color.white)
+            )
+            return
         }
 
-        val constrainedAspectRatio = originalAspectRatio.coerceIn(0.75f, 1.333f)
-        val targetHeight = (columnWidth * constrainedAspectRatio).toInt()
+        val placeholderColor = ContextCompat.getColor(coverImage.context, android.R.color.white)
+        val placeholder = placeholderColor.toDrawable()
 
-        return Pair(columnWidth, targetHeight)
-    }
+        val requestOptions = RequestOptions()
+            .centerCrop()
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .placeholder(placeholder)
+            .error(placeholder)
 
-    private fun loadImageWithOptimalCrop(imageUrl: String, width: Int, height: Int, item: FeedItem.ImageTextItem) {
         Glide.with(coverImage.context)
             .load(imageUrl)
-            .apply(RequestOptions().override(width, height))
-            .transform(CenterCrop())
+            .apply(requestOptions)
             .into(coverImage)
     }
 
@@ -104,22 +96,19 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
 
     private fun setupInteractionButtons(item: FeedItem.ImageTextItem) {
         likeButton.setOnClickListener {
-            // 切换状态
             item.liked = !item.liked
 
             if (item.liked) {
-                item.likes = (item.likes + 1)
+                item.likes += 1
             } else {
                 item.likes = (item.likes - 1).coerceAtLeast(0)
             }
 
-            // 更新界面
             likes.text = item.likes.toString()
             likeButton.setImageResource(
                 if (item.liked) R.drawable.like_icon_red else R.drawable.like_icon
             )
 
-            // 简单点赞动画
             val anim = ScaleAnimation(
                 0.8f, 1.0f, 0.8f, 1.0f,
                 ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
@@ -128,7 +117,6 @@ class ImageTextViewHolder(private val view: View) : ItemViewHolder(view) {
             anim.duration = 150
             likeButton.startAnimation(anim)
 
-            // 持久化本地状态
             prefs.setLiked(item.id, item.liked)
             prefs.setLikes(item.id, item.likes)
         }

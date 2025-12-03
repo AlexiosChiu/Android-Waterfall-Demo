@@ -46,6 +46,9 @@ class PostPageActivity : AppCompatActivity() {
 
     private val prefsName = "post_prefs"
 
+    // 保留 adapter 引用以控制视频播放
+    private lateinit var mediaAdapter: PostPageViewPagerAdapter
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.post_page_layout)
@@ -54,10 +57,8 @@ class PostPageActivity : AppCompatActivity() {
         setupObservers()
         setupBackButton()
 
-
         viewModel.setPostData(postItem)
     }
-
 
     private fun initViews() {
         backButton = findViewById(R.id.return_icon)
@@ -72,13 +73,11 @@ class PostPageActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.viewpager_progress)
         progressBar.bringToFront()
 
-        // 初始化关注按钮状态（从 SharedPreferences 读取并显示）
         val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
         val subKey = "subscribed_${postItem.createTime}"
         val isSubscribed = prefs.getBoolean(subKey, false)
         updateSubscribeUi(isSubscribed)
 
-        // 关注按钮点击：切换状态并持久化
         subscribeButton.setOnClickListener {
             val current = prefs.getBoolean(subKey, false)
             val newState = !current
@@ -86,12 +85,8 @@ class PostPageActivity : AppCompatActivity() {
             updateSubscribeUi(newState)
         }
 
-        // 设置点赞按钮点击事件：触发 ViewModel 切换并播放简单缩放动画作为反馈
         likeButton.setOnClickListener {
-            // 先触发 ViewModel 逻辑（会更新持久化与当前数据）
             viewModel.likePost()
-
-            // 播放简单的缩放动画以给用户即时反馈
             val anim = ScaleAnimation(
                 0.8f, 1.0f, 0.8f, 1.0f,
                 ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
@@ -101,36 +96,52 @@ class PostPageActivity : AppCompatActivity() {
             likeButton.startAnimation(anim)
         }
 
-        // 初始化ViewPager - 根据最长图片动态调整高度
+        // 初始化ViewPager - 支持图片和视频
         viewPager = findViewById(R.id.view_pager_post_page)
-        val adapter = PostPageViewPagerAdapter(postItem.images) { maxHeight ->
+        mediaAdapter = PostPageViewPagerAdapter(postItem.clips) { maxHeight ->
             adjustViewPagerHeight(maxHeight)
         }
-        viewPager.adapter = adapter
+        viewPager.adapter = mediaAdapter
 
-        if (postItem.images.size > 1) {// 初始化进度条，单图不显示进度条
-            progressBar.max = postItem.images.size
+        if (postItem.clips.size > 1) {
+            progressBar.max = postItem.clips.size
             progressBar.progress = 0
 
-            // 监听ViewPager滚动事件，更新进度条
             viewPager.registerOnPageChangeCallback(object :
                 androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+                override fun onPageSelected(position: Int) {
+                    super.onPageSelected(position)
+                    progressBar.progress = position + 1
+                    // 切换页面时暂停其他视频并尝试播放当前（如果是视频）
+                    mediaAdapter.pauseAll()
+                    mediaAdapter.playAt(position)
+                }
+
                 override fun onPageScrolled(
                     position: Int,
                     positionOffset: Float,
                     positionOffsetPixels: Int
                 ) {
                     super.onPageScrolled(position, positionOffset, positionOffsetPixels)
-                    progressBar.progress = position + 1
                 }
             })
         } else {
             progressBar.visibility = View.GONE
         }
+
+        // 初始尝试播放当前页面（若为视频）
+        viewPager.post {
+            mediaAdapter.playAt(viewPager.currentItem)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 暂停所有视频以避免后台播放
+        if (::mediaAdapter.isInitialized) mediaAdapter.pauseAll()
     }
 
     private fun updateSubscribeUi(subscribed: Boolean) {
-        // 已关注显示 already_subscribe_icon，未关注显示 subscribe_icon
         subscribeButton.setImageResource(
             if (subscribed) R.drawable.already_subscribe_icon else R.drawable.subscribe_icon
         )
@@ -142,15 +153,11 @@ class PostPageActivity : AppCompatActivity() {
         val displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
 
-        // 限制最大高度（例如屏幕高度的80%）
         val maxAllowedHeight = (displayMetrics.heightPixels * 0.8).toInt()
         val finalHeight = minOf(maxHeight, maxAllowedHeight)
-
-        // 设置最小高度（例如200dp）
         val minHeight = (200 * displayMetrics.density).toInt()
         val adjustedHeight = maxOf(finalHeight, minHeight)
 
-        // 更新ViewPager的高度
         val layoutParams = viewPager.layoutParams
         layoutParams.height = adjustedHeight
         viewPager.layoutParams = layoutParams
@@ -160,22 +167,16 @@ class PostPageActivity : AppCompatActivity() {
         lifecycleScope.launch {
             viewModel.uiState.collect { state ->
                 when (state) {
-                    is PostPageUiState.Loading -> {
-                        // 显示加载状态
-                    }
-
+                    is PostPageUiState.Loading -> {}
                     is PostPageUiState.Success -> {
                         updateUI(state.post)
                     }
 
-                    is PostPageUiState.Error -> {
-                        // 显示错误状态
-                    }
+                    is PostPageUiState.Error -> {}
                 }
             }
         }
 
-        // 监听当前帖子数据变化
         lifecycleScope.launch {
             viewModel.currentPost.collect { post ->
                 post?.let { updateUI(it) }
@@ -184,23 +185,18 @@ class PostPageActivity : AppCompatActivity() {
     }
 
     private fun updateUI(postItem: FeedItem.ImageTextItem) {
-        // 设置作者信息
         authorName.text = postItem.authorName
         title.text = postItem.title
-//        content.text = postItem.content
         setupContentWithHashTags()
         postTime.text = getPostTimeText(postItem.createTime)
         likes.text = postItem.likes.toString()
 
-        // 加载头像
         Glide.with(this).load(postItem.avatar).circleCrop().into(avatar)
 
-        // 根据 liked 状态切换图标（不在此处播放动画，点击时已播放）
         likeButton.setImageResource(
             if (postItem.liked) R.drawable.like_icon_big_red else R.drawable.like_icon_big
         )
 
-        // 根据持久化的关注状态更新关注图标
         val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
         val subKey = "subscribed_${postItem.createTime}"
         val isSubscribed = prefs.getBoolean(subKey, false)
@@ -216,21 +212,19 @@ class PostPageActivity : AppCompatActivity() {
         val postCal = java.util.Calendar.getInstance().apply { timeInMillis = createTime }
 
         when {
-            // 同一天：显示 HH:mm
             nowCal.get(java.util.Calendar.YEAR) == postCal.get(java.util.Calendar.YEAR) && nowCal.get(
                 java.util.Calendar.DAY_OF_YEAR
             ) == postCal.get(java.util.Calendar.DAY_OF_YEAR) -> {
                 val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                 return fmt.format(java.util.Date(createTime))
             }
-            // 昨天：显示 "昨天 HH:mm"
+
             diffDays == 1L -> {
                 val fmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                 return "昨天 ${fmt.format(java.util.Date(createTime))}"
             }
-            // 七天内：显示 x 天前
+
             diffDays in 2..6 -> return "${diffDays}天前"
-            // 其余：显示 MM-dd
             else -> {
                 val fmt = java.text.SimpleDateFormat("MM-dd", java.util.Locale.getDefault())
                 return fmt.format(java.util.Date(createTime))
@@ -239,21 +233,15 @@ class PostPageActivity : AppCompatActivity() {
     }
 
     private fun setupBackButton() {
-        backButton.setOnClickListener {
-            finish()
-        }
+        backButton.setOnClickListener { finish() }
     }
 
     private fun setupContentWithHashTags() {
-        // 将 TextView 的文本转为 SpannableString，使用 postItem.hashTags 的 start/end 索引设置 span
         val textStr = postItem.content
         val spannable = SpannableString(textStr)
-
-        // 解析颜色值
         val hashtagColor = ContextCompat.getColor(this, R.color.hashtag_color)
 
         postItem.hashTags?.forEach { hashTag ->
-            // 校验索引边界，防止越界崩溃
             val start = hashTag.start.coerceIn(0, textStr.length)
             val end = hashTag.end.coerceIn(0, textStr.length)
             if (start >= end) return@forEach
@@ -271,7 +259,6 @@ class PostPageActivity : AppCompatActivity() {
             spannable.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
-        // 应用到 TextView，并启用点击链接功能，移除高亮
         content.text = spannable
         content.movementMethod = LinkMovementMethod.getInstance()
         content.highlightColor = Color.TRANSPARENT

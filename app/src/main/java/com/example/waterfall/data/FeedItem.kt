@@ -30,8 +30,8 @@ sealed class FeedItem {
         val authorName: String,  // 作者名
         val title: String?,       // 标题
         val content: String,     // 内容
-        val images: List<String>, // 图片列表
-        val coverImage: String, // 图片地址
+        val clips: List<String>, // clip列表
+        val coverClip: String, // 封面clip地址
         val coverHeight: Int,    // 封面高度
         val coverWidth: Int,     // 封面宽度
         var likes: Int,          // 点赞数

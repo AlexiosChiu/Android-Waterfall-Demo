@@ -32,16 +32,17 @@ class NetworkManager {
     /**
      * 获取帖子列表
      * @param count 请求的作品数量
-     * @param accept_video 是否接受视频作品
+     * @param accept_video_clip 是否接受视频作品
      * @param callback 回调接口
      */
     fun getPostList(
         count: Int,
-        accept_video: Boolean = false,
+        accept_video_clip: Boolean = true,
         callback: ApiCallback<ResponseDTO.ApiResponse>
     ) {
-        // 构建URL，添加count参数
-        val url = "$baseUrl/?count=$count&accept_video=$accept_video"
+        // 构建URL，添加count和accept_video参数
+        val acceptVideoParam: String = accept_video_clip.toString()
+        val url = "$baseUrl/?count=$count&accept_video_clip=$acceptVideoParam"
         Log.d("NetworkManager", "getPostList: $url")
 
         // 创建请求
