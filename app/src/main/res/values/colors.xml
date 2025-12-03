@@ -8,5 +8,6 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="text_black">#161823</color>
+    <color name="hashtag_color">#04498D</color>
 
 </resources>

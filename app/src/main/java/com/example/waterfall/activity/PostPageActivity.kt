@@ -1,6 +1,11 @@
 package com.example.waterfall.activity
 
+import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.method.LinkMovementMethod
 import android.util.DisplayMetrics
 import android.view.animation.ScaleAnimation
 import android.widget.ImageView
@@ -8,11 +13,13 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.waterfall.R
 import com.example.waterfall.adapter.PostPageViewPagerAdapter
 import com.example.waterfall.data.FeedItem
+import com.example.waterfall.data.HashtagClickableSpan
 import com.example.waterfall.view_model.PostPageUiState
 import com.example.waterfall.view_model.PostPageViewModel
 import kotlinx.coroutines.launch
@@ -46,8 +53,10 @@ class PostPageActivity : AppCompatActivity() {
         setupObservers()
         setupBackButton()
 
+
         viewModel.setPostData(postItem)
     }
+
 
     private fun initViews() {
         backButton = findViewById(R.id.return_icon)
@@ -103,7 +112,8 @@ class PostPageActivity : AppCompatActivity() {
         progressBar.progress = 0
 
         // 监听ViewPager滚动事件，更新进度条
-        viewPager.registerOnPageChangeCallback(object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+        viewPager.registerOnPageChangeCallback(object :
+            androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
             override fun onPageScrolled(
                 position: Int,
                 positionOffset: Float,
@@ -173,7 +183,8 @@ class PostPageActivity : AppCompatActivity() {
         // 设置作者信息
         authorName.text = postItem.authorName
         title.text = postItem.title
-        content.text = postItem.content
+//        content.text = postItem.content
+        setupContentWithHashTags()
         postTime.text = getPostTimeText(postItem.createTime)
         likes.text = postItem.likes.toString()
 
@@ -227,5 +238,38 @@ class PostPageActivity : AppCompatActivity() {
         backButton.setOnClickListener {
             finish()
         }
+    }
+
+    private fun setupContentWithHashTags() {
+        // 将 TextView 的文本转为 SpannableString，使用 postItem.hashTags 的 start/end 索引设置 span
+        val textStr = postItem.content
+        val spannable = SpannableString(textStr)
+
+        // 解析颜色值
+        val hashtagColor = ContextCompat.getColor(this, R.color.hashtag_color)
+
+        postItem.hashTags?.forEach { hashTag ->
+            // 校验索引边界，防止越界崩溃
+            val start = hashTag.start.coerceIn(0, textStr.length)
+            val end = hashTag.end.coerceIn(0, textStr.length)
+            if (start >= end) return@forEach
+
+            val tagText = textStr.substring(start, end)
+            val span = HashtagClickableSpan(
+                hashTag = tagText,
+                color = hashtagColor,
+                onClick = { tag ->
+                    val intent = Intent(this, HashTagPageActivity::class.java)
+                    intent.putExtra("hashTag", tag)
+                    startActivity(intent)
+                }
+            )
+            spannable.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        // 应用到 TextView，并启用点击链接功能，移除高亮
+        content.text = spannable
+        content.movementMethod = LinkMovementMethod.getInstance()
+        content.highlightColor = Color.TRANSPARENT
     }
 }

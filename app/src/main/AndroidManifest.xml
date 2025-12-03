@@ -16,6 +16,9 @@
             android:name=".activity.PostPageActivity"
             android:exported="false" />
         <activity
+            android:name=".activity.HashTagPageActivity"
+            android:exported="false" />
+        <activity
             android:name=".activity.BaseActivity"
             android:exported="true"
             android:label="@string/app_name"

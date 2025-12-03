@@ -171,7 +171,8 @@ class HomeFragment : Fragment() {
                     coverWidth = firstClip.width,
                     likes = 0,
                     liked = false,
-                    createTime = post.createTime
+                    createTime = post.createTime,
+                    hashTags = post.hashtag ?: emptyList()
                 )
             }
             .toList()
