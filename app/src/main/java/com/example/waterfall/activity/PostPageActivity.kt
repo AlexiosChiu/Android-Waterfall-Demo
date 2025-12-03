@@ -7,6 +7,7 @@ import android.text.SpannableString
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
 import android.util.DisplayMetrics
+import android.view.View
 import android.view.animation.ScaleAnimation
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -101,32 +102,35 @@ class PostPageActivity : AppCompatActivity() {
         }
 
         // 初始化ViewPager - 根据最长图片动态调整高度
-        viewPager = findViewById<androidx.viewpager2.widget.ViewPager2>(R.id.view_pager_post_page)
+        viewPager = findViewById(R.id.view_pager_post_page)
         val adapter = PostPageViewPagerAdapter(postItem.images) { maxHeight ->
             adjustViewPagerHeight(maxHeight)
         }
         viewPager.adapter = adapter
 
-        // 初始化进度条
-        progressBar.max = postItem.images.size
-        progressBar.progress = 0
+        if (postItem.images.size > 1) {// 初始化进度条，单图不显示进度条
+            progressBar.max = postItem.images.size
+            progressBar.progress = 0
 
-        // 监听ViewPager滚动事件，更新进度条
-        viewPager.registerOnPageChangeCallback(object :
-            androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
-            override fun onPageScrolled(
-                position: Int,
-                positionOffset: Float,
-                positionOffsetPixels: Int
-            ) {
-                super.onPageScrolled(position, positionOffset, positionOffsetPixels)
-                progressBar.progress = position + 1
-            }
-        })
+            // 监听ViewPager滚动事件，更新进度条
+            viewPager.registerOnPageChangeCallback(object :
+                androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+                override fun onPageScrolled(
+                    position: Int,
+                    positionOffset: Float,
+                    positionOffsetPixels: Int
+                ) {
+                    super.onPageScrolled(position, positionOffset, positionOffsetPixels)
+                    progressBar.progress = position + 1
+                }
+            })
+        } else {
+            progressBar.visibility = View.GONE
+        }
     }
 
     private fun updateSubscribeUi(subscribed: Boolean) {
-        // 已关注显示 already_subcribe_icon，未关注显示 subscribe_icon
+        // 已关注显示 already_subscribe_icon，未关注显示 subscribe_icon
         subscribeButton.setImageResource(
             if (subscribed) R.drawable.already_subscribe_icon else R.drawable.subscribe_icon
         )
