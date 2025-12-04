@@ -8,8 +8,8 @@
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:adjustViewBounds="true"
-        app:resize_mode="fit"
+        android:adjustViewBounds="false"
+        app:resize_mode="zoom"
         app:show_buffering="when_playing"
         app:surface_type="texture_view"
         app:use_controller="false" />

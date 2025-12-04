@@ -217,12 +217,22 @@ class PostPageActivity : AppCompatActivity() {
         val displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
 
-        val maxAllowedHeight = (displayMetrics.heightPixels * 0.8f).toInt()
-        val minHeight = (200 * displayMetrics.density).toInt()
+        val screenWidth = displayMetrics.widthPixels
 
+        // 计算3:4和16:9对应的最小和最大高度
+        val minAspectHeight = (screenWidth * 0.75f).toInt()  // 3:4
+        val maxAspectHeight = (screenWidth * 0.5625f).toInt() // 16:9
+
+        // 确保高度在合理的范围内
         val finalHeight = when {
-            maxHeight > 0 -> minOf(maxHeight, maxAllowedHeight)
-            else -> minHeight
+            maxHeight > 0 -> {
+                // 限制在3:4到16:9之间
+                maxHeight.coerceIn(maxAspectHeight, minAspectHeight)
+            }
+
+            else ->
+                // 默认使用16:9的比例
+                maxAspectHeight
         }
 
         val layoutParams = viewPager.layoutParams
