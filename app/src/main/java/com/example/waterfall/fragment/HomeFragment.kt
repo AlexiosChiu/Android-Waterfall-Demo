@@ -26,6 +26,7 @@ import com.example.waterfall.view_model.HomeUiState
 import com.example.waterfall.view_model.RefreshEvent
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 class HomeFragment : Fragment() {
 
@@ -120,7 +121,10 @@ class HomeFragment : Fragment() {
         }
     }
 
-    // 添加预加载视频封面的方法
+    // 预加载视频封面
+    private val preloadedUrls = mutableSetOf<String>()
+    private var lastPreloadPosition = -1
+
     private fun preloadVideoCovers() {
         val layoutManager = recyclerView.layoutManager as? StaggeredGridLayoutManager ?: return
         val adapter = recyclerView.adapter as? FeedAdapter ?: return
@@ -138,6 +142,12 @@ class HomeFragment : Fragment() {
         val firstVisiblePosition = firstVisibleItems.minOrNull() ?: 0
         val lastVisiblePosition = lastVisibleItems.maxOrNull() ?: 0
 
+        // 防抖：只有当可见项位置变化较大时才重新预加载
+        if (abs(firstVisiblePosition - lastPreloadPosition) < 5) {
+            return
+        }
+        lastPreloadPosition = firstVisiblePosition
+
         // 计算预加载范围
         val startPreloadPosition = (firstVisiblePosition - PRELOAD_BEHIND_DISTANCE).coerceAtLeast(0)
         val endPreloadPosition =
@@ -148,36 +158,32 @@ class HomeFragment : Fragment() {
             val item = feedItems[position]
             if (item is FeedItem.ImageTextItem) {
                 // 检查是否为视频URL
-                if (isVideoUrl(item.coverClip)) {
+                if (isVideoUrl(item.coverClip) && !preloadedUrls.contains(item.coverClip)) {
                     preloadVideoFrame(item.coverClip)
                 }
             }
         }
     }
 
-    // 检查URL是否为视频格式
     private fun isVideoUrl(url: String): Boolean {
         val lowerUrl = url.lowercase()
         return lowerUrl.endsWith(".mp4") ||
                 lowerUrl.endsWith(".webm") ||
-                lowerUrl.endsWith(".m3u8") ||
-                lowerUrl.endsWith(".avi") ||
-                lowerUrl.endsWith(".mov")
+                lowerUrl.endsWith(".m3u8")
     }
 
-    // 预加载视频第一帧
     private fun preloadVideoFrame(videoUrl: String) {
-        // 使用低质量快速预加载视频第一帧
+        preloadedUrls.add(videoUrl)
         glideRequestManager
             .asBitmap()
             .load(videoUrl)
             .apply(
                 RequestOptions()
-                    .frame(0) // 第一帧
-                    .diskCacheStrategy(DiskCacheStrategy.ALL) // 全部缓存
-                    .signature(ObjectKey("${videoUrl}_frame_preload")) // 添加签名确保正确缓存
+                    .frame(0)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .signature(ObjectKey("${videoUrl}_frame_preload"))
             )
-            .preload() // 预加载而不显示
+            .preload()
     }
 
     private fun setupObservers() {
