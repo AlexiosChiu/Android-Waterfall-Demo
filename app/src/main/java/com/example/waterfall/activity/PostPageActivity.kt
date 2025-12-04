@@ -7,11 +7,13 @@ import android.text.SpannableString
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
 import android.util.DisplayMetrics
+import android.view.LayoutInflater
 import android.view.View
 import android.view.animation.ScaleAnimation
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -23,6 +25,7 @@ import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.HashtagClickableSpan
 import com.example.waterfall.view_model.PostPageUiState
 import com.example.waterfall.view_model.PostPageViewModel
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.launch
 
 class PostPageActivity : AppCompatActivity() {
@@ -42,6 +45,7 @@ class PostPageActivity : AppCompatActivity() {
     private lateinit var likes: TextView
     private lateinit var likeButton: ImageView
     private lateinit var subscribeButton: ImageView
+    private lateinit var shareButton: ImageView
     private lateinit var progressBar: ProgressBar
 
     private val prefsName = "post_prefs"
@@ -69,6 +73,7 @@ class PostPageActivity : AppCompatActivity() {
         likes = findViewById(R.id.like_count)
         likeButton = findViewById(R.id.like_icon)
         subscribeButton = findViewById(R.id.subscribe_icon)
+        shareButton = findViewById(R.id.share_icon)
         progressBar = findViewById(R.id.viewpager_progress)
         progressBar.bringToFront()
 
@@ -93,6 +98,10 @@ class PostPageActivity : AppCompatActivity() {
             )
             anim.duration = 150
             likeButton.startAnimation(anim)
+        }
+
+        shareButton.setOnClickListener {
+            showShareBottomSheet()
         }
 
         // 初始化ViewPager - 支持图片和视频
@@ -124,6 +133,63 @@ class PostPageActivity : AppCompatActivity() {
         // 初始尝试播放当前页面（若为视频）
         viewPager.post {
             mediaAdapter.playAt(viewPager.currentItem)
+        }
+    }
+
+    private fun showShareBottomSheet() {
+        val bottomSheetDialog = BottomSheetDialog(this)
+        val view = LayoutInflater.from(this).inflate(R.layout.share_bottom_sheet_layout, null)
+        bottomSheetDialog.setContentView(view)
+
+        // 设置弹窗样式
+        bottomSheetDialog.behavior.isDraggable = true
+        bottomSheetDialog.setCancelable(true)
+        bottomSheetDialog.setCanceledOnTouchOutside(true)
+
+        // 设置圆角背景
+        val bottomSheet =
+            bottomSheetDialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+        bottomSheet?.let { sheet ->
+            val radius = 16 * resources.displayMetrics.density
+            val drawable = android.graphics.drawable.GradientDrawable().apply {
+                setColor(ContextCompat.getColor(this@PostPageActivity, android.R.color.white))
+                cornerRadius = radius
+            }
+            sheet.background = drawable
+        }
+
+        // 设置分享选项点击事件
+        setupShareOptions(view, bottomSheetDialog)
+
+        bottomSheetDialog.show()
+    }
+
+    private fun setupShareOptions(
+        view: View,
+        bottomSheetDialog: BottomSheetDialog
+    ) {
+        val shareOptions: List<View> = listOf(
+            view.findViewById(R.id.share_wechat),
+            view.findViewById(R.id.share_friend_circle),
+            view.findViewById(R.id.share_qq),
+            view.findViewById(R.id.share_weibo),
+            view.findViewById(R.id.share_copy_link)
+        )
+
+        shareOptions.forEach { option ->
+            option.setOnClickListener {
+                // 处理分享选项点击事件(用弹出Toast提示用户分享)
+                val shareText = when (option.id) {
+                    R.id.share_wechat -> "分享到微信"
+                    R.id.share_friend_circle -> "分享到朋友圈"
+                    R.id.share_qq -> "分享到QQ"
+                    R.id.share_weibo -> "分享到微博"
+                    R.id.share_copy_link -> "复制链接"
+                    else -> "未知分享选项"
+                }
+                Toast.makeText(this@PostPageActivity, shareText, Toast.LENGTH_SHORT).show()
+                bottomSheetDialog.dismiss()
+            }
         }
     }
 
