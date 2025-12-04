@@ -16,6 +16,7 @@ constraintlayout = "2.1.4"
 viewpager2 = "1.0.0"
 swiperefreshlayout = "1.1.0"
 legacySupportV4 = "1.0.0"
+media3Ui = "1.8.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
 androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "swiperefreshlayout", version.ref = "swiperefreshlayout" }
 androidx-legacy-support-v4 = { group = "androidx.legacy", name = "legacy-support-v4", version.ref = "legacySupportV4" }
+androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3Ui" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

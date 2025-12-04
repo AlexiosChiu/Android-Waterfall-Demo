@@ -55,6 +55,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.github.bumptech.glide:glide:5.0.5")
+    implementation(libs.androidx.media3.ui)
     kapt("com.github.bumptech.glide:compiler:5.0.5")
     implementation("androidx.media3:media3-decoder:1.8.0")
     implementation("androidx.media3:media3-exoplayer:1.8.0")

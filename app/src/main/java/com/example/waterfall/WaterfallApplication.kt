@@ -65,7 +65,7 @@ class WaterfallApplication : Application() {
             // 使用RGB_565格式以减少内存使用并提高解码速度
             .format(DecodeFormat.PREFER_RGB_565)
             // 只缓存转换后的资源，减少磁盘空间使用
-            .diskCacheStrategy(DiskCacheStrategy.ALL)  // 使用ALL策略同时缓存源数据和转换后的数据
+            .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
             // 优先从缓存加载
             .priority(Priority.HIGH)
             // 允许内存缓存

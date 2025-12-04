@@ -46,7 +46,6 @@ class PostPageActivity : AppCompatActivity() {
 
     private val prefsName = "post_prefs"
 
-    // 保留 adapter 引用以控制视频播放
     private lateinit var mediaAdapter: PostPageViewPagerAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,13 +116,6 @@ class PostPageActivity : AppCompatActivity() {
                     mediaAdapter.playAt(position)
                 }
 
-                override fun onPageScrolled(
-                    position: Int,
-                    positionOffset: Float,
-                    positionOffsetPixels: Int
-                ) {
-                    super.onPageScrolled(position, positionOffset, positionOffsetPixels)
-                }
             })
         } else {
             progressBar.visibility = View.GONE

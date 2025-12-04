@@ -172,7 +172,6 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
     /**
      * 使用ExoPlayer提取视频缩略图
-     * 这种方法可以更好地处理网络视频
      */
     private fun extractThumbnailWithExoPlayer(videoUrl: String) {
         // 1. 首先检查缓存中是否已有该视频的帧
@@ -219,7 +218,6 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                 // 获取视频信息
                 val videoFormat = exoPlayer.videoFormat
                 if (videoFormat != null) {
-                    // 使用MediaMetadataRetriever作为备选方案
                     extractThumbnailWithSmartRetriever(videoUrl)
                 } else {
                     // 如果无法获取视频格式，使用传统方法
@@ -278,8 +276,8 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
                 // 对获取到的bitmap进行缩放处理 - 使用更小的目标尺寸
                 if (bitmap != null && !isRecycled.get()) {
-                    // 计算目标尺寸（使用30%的列宽，实现低分辨率）
-                    val targetWidth = (adapter.getColumnWidth() * 0.3f).coerceAtLeast(50f)
+                    // 计算目标尺寸（使用50%的列宽，实现低分辨率）
+                    val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
 
                     // 计算缩放比例，确保图片按比例缩放
                     val scaleFactor = targetWidth / bitmap.width
