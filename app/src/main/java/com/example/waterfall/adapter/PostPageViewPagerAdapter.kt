@@ -29,12 +29,16 @@ class PostPageViewPagerAdapter(
         private const val TYPE_IMAGE = 0
         private const val TYPE_VIDEO = 1
         private const val TAG = "PostPageAdapter"
+        private const val MIN_ASPECT_RATIO = 0.75f  // 3:4 = 0.75
+        private const val MAX_ASPECT_RATIO = 0.5625f // 16:9 = 0.5625
     }
 
     private var maxHeight = 0
     private var loadedCount = 0
     private var fallbackSent = false
     private val videoHolders = mutableSetOf<VideoViewHolder>()
+    private var firstImageAspectRatio: Float? = null  // 首图宽高比
+    private var firstImageHeight = 0  // 首图高度
 
     init {
         ensureFallbackHeight()
@@ -71,10 +75,13 @@ class PostPageViewPagerAdapter(
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val url = mediaUrls[position]
         if (holder is ImageViewHolder) {
+            // 如果是首图，计算宽高比并限制在3:4到16:9之间
+            val isFirstImage = position == 0 && firstImageAspectRatio == null
+
             Glide.with(holder.itemView.context)
                 .load(url)
                 .apply(RequestOptions().centerCrop())
-                .listener(glideListener(holder))
+                .listener(glideListener(holder, isFirstImage))
                 .into(holder.imageView)
         } else if (holder is VideoViewHolder) {
             bindVideo(holder, url)
@@ -188,8 +195,10 @@ class PostPageViewPagerAdapter(
     private fun updateMaxHeightBasedOnVideo(holder: VideoViewHolder) {
         val metrics = holder.itemView.context.resources.displayMetrics
         val screenWidth = metrics.widthPixels
-        // 使用中等分辨率比例
-        val targetHeight = (screenWidth * 0.75).toInt()
+
+        // 如果有首图比例，使用首图比例；否则使用默认的0.75
+        val targetAspectRatio = firstImageAspectRatio ?: 0.75f
+        val targetHeight = (screenWidth * targetAspectRatio).toInt()
         updateMaxHeight(targetHeight)
     }
 
@@ -204,7 +213,8 @@ class PostPageViewPagerAdapter(
         playerView.player = null
     }
 
-    private fun glideListener(holder: ImageViewHolder) = object : RequestListener<Drawable> {
+    private fun glideListener(holder: ImageViewHolder, isFirstImage: Boolean) =
+        object : RequestListener<Drawable> {
         override fun onLoadFailed(
             e: GlideException?,
             model: Any?,
@@ -229,8 +239,27 @@ class PostPageViewPagerAdapter(
                 if (width > 0 && height > 0) {
                     val displayMetrics = holder.itemView.context.resources.displayMetrics
                     val screenWidth = displayMetrics.widthPixels
-                    val aspectRatio = height.toFloat() / width.toFloat()
-                    updateMaxHeight((screenWidth * aspectRatio).toInt())
+
+                    // 计算原始宽高比
+                    val originalAspectRatio = height.toFloat() / width.toFloat()
+
+                    // 限制宽高比在3:4到16:9之间
+                    val clampedAspectRatio = when {
+                        originalAspectRatio > MIN_ASPECT_RATIO -> MIN_ASPECT_RATIO
+                        originalAspectRatio < MAX_ASPECT_RATIO -> MAX_ASPECT_RATIO
+                        else -> originalAspectRatio
+                    }
+
+                    // 如果是首图，记录宽高比和高度
+                    if (isFirstImage) {
+                        firstImageAspectRatio = clampedAspectRatio
+                        firstImageHeight = (screenWidth * clampedAspectRatio).toInt()
+                        updateMaxHeight(firstImageHeight)
+                    } else {
+                        // 非首图使用首图的比例
+                        val targetAspectRatio = firstImageAspectRatio ?: clampedAspectRatio
+                        updateMaxHeight((screenWidth * targetAspectRatio).toInt())
+                    }
                 }
             }
             loadedCount++
