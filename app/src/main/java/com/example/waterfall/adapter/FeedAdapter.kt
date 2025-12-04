@@ -12,16 +12,26 @@ import kotlin.math.roundToInt
 
 class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
 
+    data class PreviewMeta(
+        val url: String?,
+        val isVideo: Boolean,
+        val originalWidth: Int,
+        val originalHeight: Int
+    )
+
     private val heightCache = mutableMapOf<String, Int>()
+    private val previewMetaCache = mutableMapOf<String, PreviewMeta>()
     private var columnWidth: Int = 0
 
     fun setColumnWidth(width: Int) {
-        if (width > 0 && width != columnWidth) {
-            columnWidth = width
-        }
+        if (width > 0 && width != columnWidth) columnWidth = width
     }
 
     fun getColumnWidth(): Int = columnWidth
+
+    fun getCachedHeight(itemId: String): Int? = heightCache[itemId]
+
+    fun getPreviewMeta(itemId: String): PreviewMeta? = previewMetaCache[itemId]
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -33,18 +43,41 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
         holder.bind(getItem(position))
     }
 
-    override fun submitList(list: List<FeedItem>?) {
-        heightCache.clear()
-        if (list != null && columnWidth > 0) {
-            list.filterIsInstance<FeedItem.ImageTextItem>().forEach { item ->
-                val height = calculateTargetHeight(item.coverWidth, item.coverHeight, columnWidth)
-                heightCache[item.id] = height
-            }
+    override fun onViewRecycled(holder: ItemViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is ImageTextViewHolder) {
+            holder.recycle()
         }
-        super.submitList(list)
     }
 
-    fun getCachedHeight(itemId: String): Int? = heightCache[itemId]
+    override fun submitList(list: List<FeedItem>?) {
+        heightCache.clear()
+        previewMetaCache.clear()
+
+        if (list != null && columnWidth > 0) {
+            list.filterIsInstance<FeedItem.ImageTextItem>().forEach { item ->
+                val previewUrl = when {
+                    item.coverClip.isNotBlank() -> item.coverClip
+                    item.clips.isNotEmpty() -> item.clips.firstOrNull { it.isNotBlank() }
+                    else -> null
+                }
+
+                val sourceWidth = item.coverWidth.takeIf { it > 0 } ?: columnWidth
+                val sourceHeight = item.coverHeight.takeIf { it > 0 } ?: columnWidth
+                val height = calculateTargetHeight(sourceWidth, sourceHeight, columnWidth)
+
+                heightCache[item.id] = height
+                previewMetaCache[item.id] = PreviewMeta(
+                    url = previewUrl,
+                    isVideo = previewUrl?.let(::isVideoUrl) ?: false,
+                    originalWidth = sourceWidth,
+                    originalHeight = sourceHeight
+                )
+            }
+        }
+
+        super.submitList(list)
+    }
 
     private fun calculateTargetHeight(
         originalWidth: Int,
@@ -52,16 +85,16 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
         targetWidth: Int
     ): Int {
         if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
-
-        val ratio = (originalHeight.toFloat() / originalWidth).coerceIn(
-            0.75f,
-            1.333f
-        ) // 限制高度比例在 0.75 到 1.333 之间
+        val ratio = (originalHeight.toFloat() / originalWidth).coerceIn(0.75f, 1.333f)
         return (targetWidth * ratio).roundToInt()
     }
 
-
+    private fun isVideoUrl(url: String): Boolean {
+        val lower = url.lowercase()
+        return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".m3u8")
+    }
 }
+
 
 class FeedDiffCallback : DiffUtil.ItemCallback<FeedItem>() {
     override fun areItemsTheSame(oldItem: FeedItem, newItem: FeedItem): Boolean {

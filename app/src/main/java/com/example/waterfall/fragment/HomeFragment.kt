@@ -12,6 +12,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.bumptech.glide.Glide
+import com.bumptech.glide.RequestManager
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.request.RequestOptions
+import com.bumptech.glide.signature.ObjectKey
 import com.example.waterfall.R
 import com.example.waterfall.adapter.FeedAdapter
 import com.example.waterfall.data.FeedItem
@@ -36,10 +41,17 @@ class HomeFragment : Fragment() {
     private var isColumnWidthReady = false
     private var pendingFeedItems: List<FeedItem>? = null
 
+    // 预加载相关常量
+    private val PRELOAD_AHEAD_DISTANCE = 5 // 预加载可见项前面的数量
+    private val PRELOAD_BEHIND_DISTANCE = 5 // 预加载可见项后面的数量
+    private lateinit var glideRequestManager: RequestManager
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.home_page_layout, container, false)
+        // 初始化Glide请求管理器
+        glideRequestManager = Glide.with(this)
         setupViews(view)
         setupObservers()
         loadData()
@@ -69,6 +81,8 @@ class HomeFragment : Fragment() {
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     super.onScrolled(recyclerView, dx, dy)
+                    // 检测可见项目并预加载视频封面
+                    preloadVideoCovers()
                     if (!isLoading && !isLastPage) {
                         val layoutManager = recyclerView.layoutManager as StaggeredGridLayoutManager
                         val visibleItemCount = layoutManager.childCount
@@ -104,6 +118,66 @@ class HomeFragment : Fragment() {
                 submitFeedItems(items)
             }
         }
+    }
+
+    // 添加预加载视频封面的方法
+    private fun preloadVideoCovers() {
+        val layoutManager = recyclerView.layoutManager as? StaggeredGridLayoutManager ?: return
+        val adapter = recyclerView.adapter as? FeedAdapter ?: return
+        val feedItems = adapter.currentList
+
+        if (feedItems.isEmpty()) return
+
+        // 获取可见项的位置
+        val firstVisibleItems = IntArray(layoutManager.spanCount) { 0 }
+        val lastVisibleItems = IntArray(layoutManager.spanCount) { 0 }
+
+        layoutManager.findFirstVisibleItemPositions(firstVisibleItems)
+        layoutManager.findLastVisibleItemPositions(lastVisibleItems)
+
+        val firstVisiblePosition = firstVisibleItems.minOrNull() ?: 0
+        val lastVisiblePosition = lastVisibleItems.maxOrNull() ?: 0
+
+        // 计算预加载范围
+        val startPreloadPosition = (firstVisiblePosition - PRELOAD_BEHIND_DISTANCE).coerceAtLeast(0)
+        val endPreloadPosition =
+            (lastVisiblePosition + PRELOAD_AHEAD_DISTANCE).coerceAtMost(feedItems.size - 1)
+
+        // 对预加载范围内的视频项进行预加载
+        for (position in startPreloadPosition..endPreloadPosition) {
+            val item = feedItems[position]
+            if (item is FeedItem.ImageTextItem) {
+                // 检查是否为视频URL
+                if (isVideoUrl(item.coverClip)) {
+                    preloadVideoFrame(item.coverClip)
+                }
+            }
+        }
+    }
+
+    // 检查URL是否为视频格式
+    private fun isVideoUrl(url: String): Boolean {
+        val lowerUrl = url.lowercase()
+        return lowerUrl.endsWith(".mp4") ||
+                lowerUrl.endsWith(".webm") ||
+                lowerUrl.endsWith(".m3u8") ||
+                lowerUrl.endsWith(".avi") ||
+                lowerUrl.endsWith(".mov")
+    }
+
+    // 预加载视频第一帧
+    private fun preloadVideoFrame(videoUrl: String) {
+        // 使用低质量快速预加载视频第一帧
+        glideRequestManager
+            .asBitmap()
+            .load(videoUrl)
+            .apply(
+                RequestOptions()
+                    .frame(0) // 第一帧
+                    .diskCacheStrategy(DiskCacheStrategy.ALL) // 全部缓存
+                    .signature(ObjectKey("${videoUrl}_frame_preload")) // 添加签名确保正确缓存
+            )
+            .preload() // 预加载而不显示
     }
 
     private fun setupObservers() {

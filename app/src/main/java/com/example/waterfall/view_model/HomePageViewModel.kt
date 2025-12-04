@@ -34,7 +34,7 @@ class HomePageViewModel : ViewModel() {
     fun loadPosts(count: Int = 10) {
         _uiState.value = HomeUiState.Loading
         NetworkManager.getInstance()
-            .getPostList(count, false, object : ApiCallback<ResponseDTO.ApiResponse> {
+            .getPostList(count, true, object : ApiCallback<ResponseDTO.ApiResponse> {
                 override fun onSuccess(data: ResponseDTO.ApiResponse) {
                     viewModelScope.launch {
                         _postList.clear()
@@ -61,7 +61,7 @@ class HomePageViewModel : ViewModel() {
         isLoadingMore = true
 
         NetworkManager.getInstance()
-            .getPostList(count, false, object : ApiCallback<ResponseDTO.ApiResponse> {
+            .getPostList(count, true, object : ApiCallback<ResponseDTO.ApiResponse> {
                 override fun onSuccess(data: ResponseDTO.ApiResponse) {
                     viewModelScope.launch {
                         _postList.addAll(data.postList)

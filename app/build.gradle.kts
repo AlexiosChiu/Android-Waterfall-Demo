@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     kotlin("plugin.parcelize")
+    kotlin("kapt")
 }
 
 android {
@@ -54,6 +55,9 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.github.bumptech.glide:glide:5.0.5")
+    kapt("com.github.bumptech.glide:compiler:5.0.5")
+    implementation("androidx.media3:media3-decoder:1.2.1")
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.androidx.legacy.support.v4)
     testImplementation(libs.junit)

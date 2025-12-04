@@ -141,6 +141,14 @@ class PostPageActivity : AppCompatActivity() {
         if (::mediaAdapter.isInitialized) mediaAdapter.pauseAll()
     }
 
+    override fun onDestroy() {
+        if (::mediaAdapter.isInitialized) {
+            mediaAdapter.release()
+            viewPager.adapter = null
+        }
+        super.onDestroy()
+    }
+
     private fun updateSubscribeUi(subscribed: Boolean) {
         subscribeButton.setImageResource(
             if (subscribed) R.drawable.already_subscribe_icon else R.drawable.subscribe_icon
@@ -148,20 +156,22 @@ class PostPageActivity : AppCompatActivity() {
     }
 
     private fun adjustViewPagerHeight(maxHeight: Int) {
-        if (maxHeight <= 0) return
-
         val displayMetrics = DisplayMetrics()
         windowManager.defaultDisplay.getMetrics(displayMetrics)
 
-        val maxAllowedHeight = (displayMetrics.heightPixels * 0.8).toInt()
-        val finalHeight = minOf(maxHeight, maxAllowedHeight)
+        val maxAllowedHeight = (displayMetrics.heightPixels * 0.8f).toInt()
         val minHeight = (200 * displayMetrics.density).toInt()
-        val adjustedHeight = maxOf(finalHeight, minHeight)
+
+        val finalHeight = when {
+            maxHeight > 0 -> minOf(maxHeight, maxAllowedHeight)
+            else -> minHeight
+        }
 
         val layoutParams = viewPager.layoutParams
-        layoutParams.height = adjustedHeight
+        layoutParams.height = finalHeight
         viewPager.layoutParams = layoutParams
     }
+
 
     private fun setupObservers() {
         lifecycleScope.launch {
