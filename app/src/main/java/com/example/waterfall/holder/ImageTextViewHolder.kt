@@ -172,7 +172,6 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
     /**
      * 使用ExoPlayer提取视频缩略图
-     * 这种方法可以更好地处理网络视频
      */
     private fun extractThumbnailWithExoPlayer(videoUrl: String) {
         // 1. 首先检查缓存中是否已有该视频的帧

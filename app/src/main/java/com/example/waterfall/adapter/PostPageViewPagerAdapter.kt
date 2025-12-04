@@ -1,15 +1,16 @@
 package com.example.waterfall.adapter
 
 import android.graphics.drawable.Drawable
-import android.media.MediaPlayer
-import android.net.Uri
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import android.widget.MediaController
-import android.widget.VideoView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
@@ -44,10 +45,10 @@ class PostPageViewPagerAdapter(
     }
 
     inner class VideoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val videoView: VideoView = itemView.findViewById(R.id.video_view_pager_item)
+        val playerView: PlayerView = itemView.findViewById(R.id.player_view)
+        var exoPlayer: ExoPlayer? = null
         var isPrepared: Boolean = false
         var pendingPlay: Boolean = false
-        var mediaController: MediaController? = null
     }
 
     override fun getItemViewType(position: Int): Int =
@@ -99,7 +100,7 @@ class PostPageViewPagerAdapter(
         val holder = findVideoHolder(position) ?: return
         try {
             if (holder.isPrepared) {
-                if (!holder.videoView.isPlaying) holder.videoView.start()
+                holder.exoPlayer?.play()
                 holder.pendingPlay = false
             } else {
                 holder.pendingPlay = true
@@ -120,7 +121,9 @@ class PostPageViewPagerAdapter(
             }
             holder.pendingPlay = false
             try {
-                if (holder.isPrepared && holder.videoView.isPlaying) holder.videoView.pause()
+                if (holder.isPrepared) {
+                    holder.exoPlayer?.pause()
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "pauseAll failed", e)
             }
@@ -131,66 +134,74 @@ class PostPageViewPagerAdapter(
         videoHolders.add(holder)
         holder.reset()
 
-        holder.mediaController = MediaController(holder.itemView.context).apply {
-            setAnchorView(holder.videoView)
+        // 创建ExoPlayer实例
+        holder.exoPlayer = ExoPlayer.Builder(holder.itemView.context).build().apply {
+            setMediaItem(MediaItem.fromUri(url))
+            repeatMode = Player.REPEAT_MODE_ALL
+
+            // 设置自适应流媒体参数，优先选择中等分辨率
+            trackSelectionParameters = trackSelectionParameters
+                .buildUpon()
+                .setMaxVideoSizeSd()
+                .build()
+
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    when (playbackState) {
+                        Player.STATE_READY -> {
+                            holder.isPrepared = true
+                            updateMaxHeightBasedOnVideo(holder)
+
+                            if (holder.pendingPlay) {
+                                play()
+                                holder.pendingPlay = false
+                            }
+                            loadedCount++
+                            checkAllMediaLoaded()
+                        }
+
+                        Player.STATE_ENDED -> {
+                            // 视频播放完成后重新开始
+                            seekTo(0)
+                            play()
+                        }
+                    }
+                }
+
+                // 修复错误处理方法
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.w(TAG, "ExoPlayer error for $url: ${error.message}", error)
+                    holder.isPrepared = false
+                    holder.pendingPlay = false
+                    loadedCount++
+                    checkAllMediaLoaded()
+                }
+            })
+
+            prepare()
         }
-        holder.videoView.setMediaController(holder.mediaController)
 
-        holder.videoView.setOnPreparedListener { mp: MediaPlayer ->
-            holder.isPrepared = true
-            mp.isLooping = true
+        holder.playerView.player = holder.exoPlayer
+        holder.playerView.useController = true
+    }
 
-            val metrics = holder.itemView.context.resources.displayMetrics
-            val screenWidth = metrics.widthPixels
-            val aspectRatio =
-                if (mp.videoWidth > 0) mp.videoHeight.toFloat() / mp.videoWidth.toFloat() else 1f
-            updateMaxHeight((screenWidth * aspectRatio).toInt())
-
-            if (holder.pendingPlay && !holder.videoView.isPlaying) {
-                holder.videoView.start()
-            }
-            holder.pendingPlay = false
-            loadedCount++
-            checkAllMediaLoaded()
-        }
-
-        holder.videoView.setOnErrorListener { _, what, extra ->
-            Log.w(TAG, "video error: what=$what extra=$extra url=$url")
-            holder.isPrepared = false
-            holder.pendingPlay = false
-            loadedCount++
-            checkAllMediaLoaded()
-            true
-        }
-
-        try {
-            holder.videoView.setVideoURI(Uri.parse(url))
-        } catch (e: Exception) {
-            Log.w(TAG, "setVideoURI failed for $url", e)
-            loadedCount++
-            checkAllMediaLoaded()
-        }
+    private fun updateMaxHeightBasedOnVideo(holder: VideoViewHolder) {
+        val metrics = holder.itemView.context.resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        // 使用中等分辨率比例
+        val targetHeight = (screenWidth * 0.75).toInt()
+        updateMaxHeight(targetHeight)
     }
 
     private fun VideoViewHolder.reset() {
         pendingPlay = false
         isPrepared = false
-        try {
-            videoView.stopPlayback()
-        } catch (e: Exception) {
-            Log.w(TAG, "stopPlayback failed", e)
+        exoPlayer?.let { player ->
+            player.stop()
+            player.release()
         }
-        mediaController?.let {
-            try {
-                it.hide()
-            } catch (_: Exception) {
-            }
-            it.setAnchorView(null)
-        }
-        mediaController = null
-        videoView.setMediaController(null)
-        videoView.setOnPreparedListener(null)
-        videoView.setOnErrorListener(null)
+        exoPlayer = null
+        playerView.player = null
     }
 
     private fun glideListener(holder: ImageViewHolder) = object : RequestListener<Drawable> {
