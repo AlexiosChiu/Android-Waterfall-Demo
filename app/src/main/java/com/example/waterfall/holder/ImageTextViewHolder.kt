@@ -12,6 +12,10 @@ import android.view.animation.ScaleAnimation
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.graphics.scale
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.example.waterfall.R
@@ -19,6 +23,9 @@ import com.example.waterfall.activity.PostPageActivity
 import com.example.waterfall.adapter.FeedAdapter
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.LikePreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -36,15 +43,18 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     private val isRecycled = AtomicBoolean(false)
     private var currentVideoTask: Thread? = null
     private var currentMediaRetriever: MediaMetadataRetriever? = null
+    private var currentThumbnailExtractionTask: kotlinx.coroutines.Job? = null
+    private var currentExoPlayer: ExoPlayer? = null
 
     // 视频帧缓存
     companion object {
-        // 使用LRU缓存更好，但为简化使用ConcurrentHashMap
         private val videoFrameCache = ConcurrentHashMap<String, Bitmap>()
         private const val MAX_CACHE_SIZE = 32 // 限制缓存大小
     }
 
     override fun bind(item: FeedItem) {
+        // 立即取消所有之前的异步任务
+        recycle()
         // 重置回收标志
         isRecycled.set(false)
 
@@ -89,41 +99,60 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         // 标记为已回收
         isRecycled.set(true)
 
+        // 立即清除图片显示
+        coverImage.setImageDrawable(null)
+
         // 取消当前正在执行的视频帧提取任务
-        if (currentVideoTask != null && currentVideoTask!!.isAlive) {
-            try {
-                // 通过标志让线程自行退出
-                releaseMediaRetriever()
-            } catch (e: Exception) {
-                e.printStackTrace()
+        currentVideoTask?.let { task ->
+            if (task.isAlive) {
+                try {
+                    task.interrupt() // 强制中断线程
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
+            currentVideoTask = null
         }
+
+        // 取消协程任务
+        currentThumbnailExtractionTask?.cancel()
+        currentThumbnailExtractionTask = null
+
+        // 释放ExoPlayer资源
+        currentExoPlayer?.release()
+        currentExoPlayer = null
 
         // 取消Glide加载
         Glide.with(coverImage).clear(coverImage)
 
-        // 释放其他资源
-        currentVideoTask = null
+        // 释放MediaMetadataRetriever
+        releaseMediaRetriever()
     }
 
     private fun loadImage(imageUrl: String) {
+        // 立即清除当前图片，避免显示旧数据
+        coverImage.setImageDrawable(null)
+
         // 检查是否为视频URL
         fun isVideo(url: String): Boolean {
             val lower = url.lowercase()
             return lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".m3u8")
         }
 
-        // 对于图片URL，使用Glide加载较低分辨率的版本（之前已经修改过）
+        // 对于图片URL，使用Glide加载较低分辨率的版本
         if (!isVideo(imageUrl)) {
+            // 立即取消所有之前的Glide加载
+            Glide.with(coverImage).clear(coverImage)
+
             // 快速加载模糊的低分辨率版本
             val lowQualityRequest = Glide.with(coverImage.context)
                 .load(imageUrl)
-                .override(20) // 超低分辨率预览
+                .override(10) // 超低分辨率预览
                 .centerCrop()
                 .dontAnimate()
 
             // 然后加载优化后的中等分辨率版本
-            val targetWidth = adapter.getColumnWidth() * 0.8f
+            val targetWidth = adapter.getColumnWidth() * 0.5f
             val targetHeight = targetWidth * 0.75f // 保持合适的宽高比
 
             Glide.with(coverImage.context)
@@ -137,23 +166,87 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             return
         }
 
-        // 对于视频URL：
+        // 对于视频URL，优先使用ExoPlayer的缩略图提取
+        extractThumbnailWithExoPlayer(imageUrl)
+    }
+
+    /**
+     * 使用ExoPlayer提取视频缩略图
+     * 这种方法可以更好地处理网络视频
+     */
+    private fun extractThumbnailWithExoPlayer(videoUrl: String) {
         // 1. 首先检查缓存中是否已有该视频的帧
-        if (videoFrameCache.containsKey(imageUrl)) {
-            val cachedBitmap = videoFrameCache[imageUrl]
+        if (videoFrameCache.containsKey(videoUrl)) {
+            val cachedBitmap = videoFrameCache[videoUrl]
             if (cachedBitmap != null && !cachedBitmap.isRecycled) {
                 coverImage.setImageBitmap(cachedBitmap)
                 return // 使用缓存的帧，不再进行加载
             } else {
                 // 缓存中的bitmap已被回收，移除缓存
-                videoFrameCache.remove(imageUrl)
+                videoFrameCache.remove(videoUrl)
             }
         }
 
+        // 2. 使用协程在后台执行缩略图提取
+        currentThumbnailExtractionTask = CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // 检查是否已被回收
+                if (isRecycled.get()) return@launch
 
-        // 2. 在后台线程使用MediaMetadataRetriever提取视频帧
+                // 创建ExoPlayer实例
+                val exoPlayer = ExoPlayer.Builder(view.context).build()
+                currentExoPlayer = exoPlayer
+
+                // 创建MediaItem
+                val mediaItem = MediaItem.fromUri(videoUrl)
+
+                // 设置媒体项并准备播放器
+                exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.prepare()
+
+                // 等待播放器准备完成
+                var retryCount = 0
+                while (exoPlayer.playbackState != Player.STATE_READY && retryCount < 10 && !isRecycled.get()) {
+                    kotlinx.coroutines.delay(100)
+                    retryCount++
+                }
+
+                if (exoPlayer.playbackState != Player.STATE_READY || isRecycled.get()) {
+                    exoPlayer.release()
+                    return@launch
+                }
+
+                // 获取视频信息
+                val videoFormat = exoPlayer.videoFormat
+                if (videoFormat != null) {
+                    // 使用MediaMetadataRetriever作为备选方案
+                    extractThumbnailWithSmartRetriever(videoUrl)
+                } else {
+                    // 如果无法获取视频格式，使用传统方法
+                    fallbackToMediaMetadataRetriever(videoUrl)
+                }
+
+                // 释放ExoPlayer资源
+                exoPlayer.release()
+                currentExoPlayer = null
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // 如果ExoPlayer方法失败，回退到MediaMetadataRetriever
+                if (!isRecycled.get()) {
+                    fallbackToMediaMetadataRetriever(videoUrl)
+                }
+            }
+        }
+    }
+
+    /**
+     * 智能的MediaMetadataRetriever方案 - 优化性能
+     */
+    private fun extractThumbnailWithSmartRetriever(videoUrl: String) {
+        // 在后台线程使用MediaMetadataRetriever提取视频帧
         val videoTask = Thread {
-            var bitmap: Bitmap? = null
+            var bitmap: Bitmap?
 
             try {
                 // 创建新的MediaMetadataRetriever
@@ -168,10 +261,10 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
                 // 设置数据源，尝试处理网络视频URL
                 try {
-                    retriever.setDataSource(imageUrl, HashMap<String, String>())
-                } catch (e: Exception) {
+                    retriever.setDataSource(videoUrl, HashMap<String, String>())
+                } catch (_: Exception) {
                     // 如果带headers的方法失败，尝试简单设置
-                    retriever.setDataSource(imageUrl)
+                    retriever.setDataSource(videoUrl)
                 }
 
                 // 再次检查是否已被回收
@@ -180,28 +273,21 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                     return@Thread
                 }
 
-                // 获取第0毫秒的帧
+                // 获取第0毫秒的帧 - 使用更小的分辨率选项
                 bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
-                // 如果第一帧获取失败，尝试其他时间点
-                if (bitmap == null && !isRecycled.get()) {
-                    bitmap = retriever.getFrameAtTime(1000) // 尝试第一秒
-                }
-
-                // 对获取到的bitmap进行缩放处理
+                // 对获取到的bitmap进行缩放处理 - 使用更小的目标尺寸
                 if (bitmap != null && !isRecycled.get()) {
-                    // 计算目标尺寸（使用80%的列宽）
-                    val targetWidth = adapter.getColumnWidth() * 0.8f
+                    // 计算目标尺寸（使用30%的列宽，实现低分辨率）
+                    val targetWidth = (adapter.getColumnWidth() * 0.3f).coerceAtLeast(50f)
 
                     // 计算缩放比例，确保图片按比例缩放
                     val scaleFactor = targetWidth / bitmap.width
 
                     // 创建缩放后的bitmap
-                    bitmap = Bitmap.createScaledBitmap(
-                        bitmap,
+                    bitmap = bitmap.scale(
                         targetWidth.toInt(),
-                        (bitmap.height * scaleFactor).toInt(),
-                        true // 使用双线性过滤使图片更平滑
+                        (bitmap.height * scaleFactor).toInt().coerceAtLeast(30)
                     )
                 }
 
@@ -230,7 +316,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                         }
                     }
                     // 添加新缓存
-                    videoFrameCache[imageUrl] = bitmap
+                    videoFrameCache[videoUrl] = bitmap
                 }
 
                 // 在主线程平滑过渡到视频帧
@@ -246,7 +332,6 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        // 失败时保持占位图不变
                     }
                 }
             }
@@ -255,6 +340,13 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         // 保存任务引用并启动
         currentVideoTask = videoTask
         videoTask.start()
+    }
+
+    /**
+     * 回退方案：使用MediaMetadataRetriever
+     */
+    private fun fallbackToMediaMetadataRetriever(imageUrl: String) {
+        extractThumbnailWithSmartRetriever(imageUrl)
     }
 
     // 安全释放MediaMetadataRetriever资源

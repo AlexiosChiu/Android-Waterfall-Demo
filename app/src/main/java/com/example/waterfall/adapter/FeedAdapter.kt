@@ -31,8 +31,6 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
 
     fun getCachedHeight(itemId: String): Int? = heightCache[itemId]
 
-    fun getPreviewMeta(itemId: String): PreviewMeta? = previewMetaCache[itemId]
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.image_text_item_layout, parent, false)
