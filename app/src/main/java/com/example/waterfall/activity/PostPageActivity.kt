@@ -106,6 +106,7 @@ class PostPageActivity : AppCompatActivity() {
 
         // 初始化ViewPager - 支持图片和视频
         viewPager = findViewById(R.id.view_pager_post_page)
+        adjustViewPagerHeight(0) // 先填充一个默认高度，确保首个item能够绑定
         mediaAdapter = PostPageViewPagerAdapter(postItem.clips) { maxHeight ->
             adjustViewPagerHeight(maxHeight)
         }
@@ -213,30 +214,18 @@ class PostPageActivity : AppCompatActivity() {
         )
     }
 
-    private fun adjustViewPagerHeight(maxHeight: Int) {
-        val displayMetrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(displayMetrics)
-
-        val screenWidth = displayMetrics.widthPixels
-
-        // 计算3:4和16:9对应的最小和最大高度
-        val minAspectHeight = (screenWidth * 0.75f).toInt()  // 3:4
-        val maxAspectHeight = (screenWidth * 0.5625f).toInt() // 16:9
-
-        // 确保高度在合理的范围内
-        val finalHeight = when {
-            maxHeight > 0 -> {
-                // 限制在3:4到16:9之间
-                maxHeight.coerceIn(maxAspectHeight, minAspectHeight)
-            }
-
-            else ->
-                // 默认使用16:9的比例
-                maxAspectHeight
-        }
-
+    private fun adjustViewPagerHeight(height: Int) {
         val layoutParams = viewPager.layoutParams
-        layoutParams.height = finalHeight
+        if (height > 0) {
+            layoutParams.height = height
+        } else {
+            // 当初始高度为0时，设置一个临时的默认高度（4:3），以确保容器在加载前可见。
+            val displayMetrics = DisplayMetrics()
+            windowManager.defaultDisplay.getMetrics(displayMetrics)
+            val screenWidth = displayMetrics.widthPixels
+            // 使用 4:3 的比例作为默认值
+            layoutParams.height = (screenWidth * 3 / 4)
+        }
         viewPager.layoutParams = layoutParams
     }
 

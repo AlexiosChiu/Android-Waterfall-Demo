@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
+import android.util.LruCache
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AlphaAnimation
@@ -26,7 +27,6 @@ import com.example.waterfall.data.LikePreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapter) :
@@ -48,8 +48,24 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
     // 视频帧缓存
     companion object {
-        private val videoFrameCache = ConcurrentHashMap<String, Bitmap>()
-        private const val MAX_CACHE_SIZE = 32 // 限制缓存大小
+        private const val MAX_CACHE_SIZE = 128 * 1024 * 1024 // 128MB缓存大小
+
+        // 使用LruCache自动管理内存
+        private val videoFrameCache = object : LruCache<String, Bitmap>(MAX_CACHE_SIZE) {
+            override fun sizeOf(key: String, value: Bitmap): Int {
+                // 返回bitmap占用的字节数
+                return value.byteCount
+            }
+
+            override fun entryRemoved(
+                evicted: Boolean,
+                key: String,
+                oldValue: Bitmap,
+                newValue: Bitmap?
+            ) {
+                // 当缓存项被移除时，不需要手动回收，LruCache会自动处理
+            }
+        }
     }
 
     override fun bind(item: FeedItem) {
@@ -175,15 +191,13 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
      */
     private fun extractThumbnailWithExoPlayer(videoUrl: String) {
         // 1. 首先检查缓存中是否已有该视频的帧
-        if (videoFrameCache.containsKey(videoUrl)) {
-            val cachedBitmap = videoFrameCache[videoUrl]
-            if (cachedBitmap != null && !cachedBitmap.isRecycled) {
-                coverImage.setImageBitmap(cachedBitmap)
-                return // 使用缓存的帧，不再进行加载
-            } else {
-                // 缓存中的bitmap已被回收，移除缓存
-                videoFrameCache.remove(videoUrl)
-            }
+        val cachedBitmap = videoFrameCache.get(videoUrl)
+        if (cachedBitmap != null && !cachedBitmap.isRecycled) {
+            coverImage.setImageBitmap(cachedBitmap)
+            return // 使用缓存的帧，不再进行加载
+        } else if (cachedBitmap != null) {
+            // 缓存中的bitmap已被回收，移除缓存
+            videoFrameCache.remove(videoUrl)
         }
 
         // 2. 使用协程在后台执行缩略图提取
@@ -298,23 +312,11 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             }
 
             // 只在成功获取到有效bitmap且ViewHolder未被回收时才更新UI
+            // 只在成功获取到有效bitmap且ViewHolder未被回收时才更新UI
             if (bitmap != null && !bitmap.isRecycled && !isRecycled.get()) {
                 // 缓存获取到的帧
                 synchronized(videoFrameCache) {
-                    // 限制缓存大小，移除最旧的项
-                    if (videoFrameCache.size >= MAX_CACHE_SIZE) {
-                        val oldestKey = videoFrameCache.keys.firstOrNull()
-                        oldestKey?.let {
-                            val oldBitmap = videoFrameCache[it]
-                            if (oldBitmap != null && !oldBitmap.isRecycled) {
-                                // 安全地回收旧bitmap以释放内存
-                                oldBitmap.recycle()
-                            }
-                            videoFrameCache.remove(it)
-                        }
-                    }
-                    // 添加新缓存
-                    videoFrameCache[videoUrl] = bitmap
+                    videoFrameCache.put(videoUrl, bitmap)
                 }
 
                 // 在主线程平滑过渡到视频帧
