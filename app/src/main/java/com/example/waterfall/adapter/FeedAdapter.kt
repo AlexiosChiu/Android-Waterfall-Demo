@@ -1,5 +1,6 @@
 package com.example.waterfall.adapter
 
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -13,10 +14,7 @@ import kotlin.math.roundToInt
 class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
 
     data class PreviewMeta(
-        val url: String?,
-        val isVideo: Boolean,
-        val originalWidth: Int,
-        val originalHeight: Int
+        val url: String?, val isVideo: Boolean, val originalWidth: Int, val originalHeight: Int
     )
 
     private val heightCache = mutableMapOf<String, Int>()
@@ -48,7 +46,7 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
         }
     }
 
-    override fun submitList(list: List<FeedItem>?) {
+    override fun submitList(list: List<FeedItem>?, commitCallback: Runnable?) {
         heightCache.clear()
         previewMetaCache.clear()
 
@@ -74,16 +72,22 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
             }
         }
 
-        super.submitList(list)
+        super.submitList(list, commitCallback)
     }
 
     private fun calculateTargetHeight(
-        originalWidth: Int,
-        originalHeight: Int,
-        targetWidth: Int
+        originalWidth: Int, originalHeight: Int, targetWidth: Int
     ): Int {
+        Log.i(
+            "FeedAdapter",
+            "calculateTargetHeight: originalWidth=$originalWidth, originalHeight=$originalHeight, targetWidth=$targetWidth"
+        )
         if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
         val ratio = (originalWidth.toFloat() / originalHeight.toFloat()).coerceIn(0.75f, 1.333f)
+        Log.i(
+            "FeedAdapter",
+            "calculateTargetHeight: ratio=$ratio, targetHeight=${(targetWidth / ratio).roundToInt()}"
+        )
         return (targetWidth / ratio).roundToInt()
     }
 

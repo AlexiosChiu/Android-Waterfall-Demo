@@ -171,23 +171,22 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             // 立即取消所有之前的Glide加载
             Glide.with(coverImage).clear(coverImage)
 
+            val targetWidth =
+                coverImage.layoutParams?.width?.takeIf { it > 0 } ?: adapter.getColumnWidth()
+            val targetHeight = coverImage.layoutParams?.height?.takeIf { it > 0 } ?: targetWidth
+
             // 快速加载模糊的低分辨率版本
             val lowQualityRequest = Glide.with(coverImage.context)
                 .load(imageUrl)
                 .override(10) // 超低分辨率预览
-                .centerCrop()
                 .dontAnimate()
-
-            // 然后加载优化后的中等分辨率版本
-            val targetWidth = adapter.getColumnWidth() * 0.5f
-            val targetHeight = targetWidth * 0.75f // 保持合适的宽高比
 
             Glide.with(coverImage.context)
                 .load(imageUrl)
-                .centerCrop()
                 .thumbnail(lowQualityRequest)
-                .override(targetWidth.toInt(), targetHeight.toInt()) // 限制最大尺寸
-                .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+                .override(targetWidth, targetHeight)
+                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .dontAnimate()
                 .into(coverImage)
 
             return
