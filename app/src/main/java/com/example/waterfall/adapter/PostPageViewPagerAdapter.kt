@@ -32,8 +32,8 @@ class PostPageViewPagerAdapter(
         private const val TYPE_IMAGE = 0
         private const val TYPE_VIDEO = 1
         private const val TAG = "PostPageAdapter"
-        private const val MIN_PORTRAIT_RATIO = 0.75f
-        private const val MAX_LANDSCAPE_RATIO = 1.333f
+        private const val MIN_PORTRAIT_RATIO = 0.75f    // 3:4
+        private const val MAX_LANDSCAPE_RATIO = 1.778f  // 16:9
     }
 
     private var maxHeight = 0
@@ -74,7 +74,7 @@ class PostPageViewPagerAdapter(
             tryApplyPreMeasuredAspectRatio(holder.itemView)
         }
         if (holder is ImageViewHolder) {
-            Glide.with(holder.itemView.context).load(url).apply(RequestOptions().centerCrop())
+            Glide.with(holder.itemView.context).load(url).apply(RequestOptions())
                 .listener(glideListener()).into(holder.imageView)
         } else if (holder is VideoViewHolder) {
             bindVideo(holder, url, position)
