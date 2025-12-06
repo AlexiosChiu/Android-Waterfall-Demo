@@ -14,10 +14,11 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.RequestManager
+import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.Target
-import com.bumptech.glide.signature.ObjectKey
 import com.example.waterfall.R
 import com.example.waterfall.adapter.FeedAdapter
 import com.example.waterfall.data.FeedItem
@@ -25,8 +26,14 @@ import com.example.waterfall.data.ResponseDTO
 import com.example.waterfall.view_model.HomePageViewModel
 import com.example.waterfall.view_model.HomeUiState
 import com.example.waterfall.view_model.RefreshEvent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlin.math.abs
 
 class HomeFragment : Fragment() {
@@ -43,6 +50,8 @@ class HomeFragment : Fragment() {
     private var isColumnWidthReady = false
     private var pendingFeedItems: List<FeedItem>? = null
     private var columnWidth: Int = 0
+    private val videoCoverScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val videoPreloadSemaphore = Semaphore(permits = 1)
 
     // 预加载相关常量
     private val PRELOAD_AHEAD_DISTANCE = 3 // 预加载可见项前面的数量
@@ -172,13 +181,29 @@ class HomeFragment : Fragment() {
     }
 
     private fun preloadVideoFrame(videoUrl: String) {
-        preloadedUrls.add(videoUrl)
-        var options = RequestOptions().frame(0).diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-            .signature(ObjectKey("${videoUrl}_frame_preload"))
-        if (columnWidth > 0) {
-            options = options.override(columnWidth, Target.SIZE_ORIGINAL)
+        if (!preloadedUrls.add(videoUrl)) return
+        videoCoverScope.launch {
+            videoPreloadSemaphore.withPermit {
+                val requestOptions = RequestOptions()
+                    .frame(750_000)
+                    .format(DecodeFormat.PREFER_RGB_565)
+                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                    .override(columnWidth, Target.SIZE_ORIGINAL)
+                    .downsample(DownsampleStrategy.AT_MOST)
+
+                val target = glideRequestManager.asBitmap()
+                    .load(videoUrl)
+                    .apply(requestOptions)
+                    .thumbnail(0.25f)
+                    .submit()
+
+                try {
+                    target.get()
+                } finally {
+                    glideRequestManager.clear(target)
+                }
+            }
         }
-        glideRequestManager.asBitmap().load(videoUrl).apply(options).preload()
     }
 
     private fun setupObservers() {
@@ -271,6 +296,7 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        videoCoverScope.cancel()
         resetPreloadState()
     }
 

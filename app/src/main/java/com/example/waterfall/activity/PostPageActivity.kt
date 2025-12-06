@@ -128,9 +128,12 @@ class PostPageActivity : AppCompatActivity() {
         // 初始化ViewPager - 支持图片和视频
         viewPager = findViewById(R.id.view_pager_post_page)
         adjustViewPagerHeight(0) // 先填充一个默认高度，确保首个item能够绑定
-        mediaAdapter = PostPageViewPagerAdapter(postItem.clips) { maxHeight ->
-            adjustViewPagerHeight(maxHeight)
-        }
+        mediaAdapter = PostPageViewPagerAdapter(
+            mediaUrls = postItem.clips,
+            onMaxImageSizeMeasured = { maxHeight -> adjustViewPagerHeight(maxHeight) },
+            firstClipWidth = postItem.coverWidth,
+            firstClipHeight = postItem.coverHeight
+        )
         viewPager.adapter = mediaAdapter
 
         if (postItem.clips.size > 1) {

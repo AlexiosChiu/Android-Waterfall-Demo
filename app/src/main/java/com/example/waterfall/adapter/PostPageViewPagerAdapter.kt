@@ -1,6 +1,5 @@
 package com.example.waterfall.adapter
 
-import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.util.Log
 import android.view.LayoutInflater
@@ -19,14 +18,14 @@ import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
-import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
-import com.bumptech.glide.request.transition.Transition
 import com.example.waterfall.R
 
 class PostPageViewPagerAdapter(
     private val mediaUrls: List<String>,
-    private val onMaxImageSizeMeasured: (maxHeight: Int) -> Unit
+    private val onMaxImageSizeMeasured: (maxHeight: Int) -> Unit,
+    private val firstClipWidth: Int?,
+    private val firstClipHeight: Int?
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -71,14 +70,12 @@ class PostPageViewPagerAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val url = mediaUrls[position]
+        if (position == 0) {
+            tryApplyPreMeasuredAspectRatio(holder.itemView)
+        }
         if (holder is ImageViewHolder) {
-            val captureFirst = position == 0 && firstMediaAspectRatio == null
-            if (captureFirst) fetchOriginalImageSize(holder, url)
-            Glide.with(holder.itemView.context)
-                .load(url)
-                .apply(RequestOptions().centerCrop())
-                .listener(glideListener())
-                .into(holder.imageView)
+            Glide.with(holder.itemView.context).load(url).apply(RequestOptions().centerCrop())
+                .listener(glideListener()).into(holder.imageView)
         } else if (holder is VideoViewHolder) {
             bindVideo(holder, url, position)
         }
@@ -138,10 +135,8 @@ class PostPageViewPagerAdapter(
         holder.exoPlayer = ExoPlayer.Builder(holder.itemView.context).build().apply {
             setMediaItem(MediaItem.fromUri(url))
             repeatMode = Player.REPEAT_MODE_ALL
-            trackSelectionParameters = trackSelectionParameters
-                .buildUpon()
-                .setMaxVideoSizeSd()
-                .build()
+            trackSelectionParameters =
+                trackSelectionParameters.buildUpon().setMaxVideoSizeSd().build()
 
             addListener(object : Player.Listener {
                 override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -191,67 +186,43 @@ class PostPageViewPagerAdapter(
         holder.playerView.useController = true
     }
 
-    private fun glideListener() =
-        object : RequestListener<Drawable> {
-            override fun onLoadFailed(
-                e: GlideException?,
-                model: Any?,
-                target: Target<Drawable>?,
-                isFirstResource: Boolean
-            ): Boolean {
-                loadedCount++
-                checkAllMediaLoaded()
-                return false
-            }
-
-            override fun onResourceReady(
-                resource: Drawable?,
-                model: Any?,
-                target: Target<Drawable>?,
-                dataSource: DataSource?,
-                isFirstResource: Boolean
-            ): Boolean {
-                loadedCount++
-                checkAllMediaLoaded()
-                return false
-            }
+    private fun glideListener() = object : RequestListener<Drawable> {
+        override fun onLoadFailed(
+            e: GlideException?, model: Any?, target: Target<Drawable>?, isFirstResource: Boolean
+        ): Boolean {
+            loadedCount++
+            checkAllMediaLoaded()
+            return false
         }
 
-    private fun fetchOriginalImageSize(holder: ImageViewHolder, url: String) {
-        Glide.with(holder.itemView.context)
-            .asBitmap()
-            .load(url)
-            .apply(
-                RequestOptions()
-                    .override(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL)
-                    .dontTransform()
-            )
-            .into(object : CustomTarget<Bitmap>() {
-                override fun onResourceReady(
-                    resource: Bitmap,
-                    transition: Transition<in Bitmap>?
-                ) {
-                    if (firstMediaAspectRatio != null) return
-                    val width = resource.width
-                    val height = resource.height
-                    if (width > 0 && height > 0) {
-                        val screenWidth =
-                            holder.itemView.context.resources.displayMetrics.widthPixels
-                        val ratio = clampAspectRatio(width.toFloat() / height.toFloat())
-                        applyFirstMediaAspectRatio(ratio, screenWidth)
-                    }
-                }
-
-                override fun onLoadCleared(placeholder: Drawable?) {}
-            })
+        override fun onResourceReady(
+            resource: Drawable?,
+            model: Any?,
+            target: Target<Drawable>?,
+            dataSource: DataSource?,
+            isFirstResource: Boolean
+        ): Boolean {
+            loadedCount++
+            checkAllMediaLoaded()
+            return false
+        }
     }
 
-    private fun clampAspectRatio(rawRatio: Float): Float =
-        when {
-            rawRatio < MIN_PORTRAIT_RATIO -> MIN_PORTRAIT_RATIO
-            rawRatio > MAX_LANDSCAPE_RATIO -> MAX_LANDSCAPE_RATIO
-            else -> rawRatio
-        }
+    private fun tryApplyPreMeasuredAspectRatio(view: View) {
+        if (firstMediaAspectRatio != null) return
+        val width = firstClipWidth
+        val height = firstClipHeight
+        if (width == null || height == null || width <= 0 || height <= 0) return
+        val ratio = clampAspectRatio(width.toFloat() / height.toFloat())
+        val screenWidth = view.context.resources.displayMetrics.widthPixels
+        applyFirstMediaAspectRatio(ratio, screenWidth)
+    }
+
+    private fun clampAspectRatio(rawRatio: Float): Float = when {
+        rawRatio < MIN_PORTRAIT_RATIO -> MIN_PORTRAIT_RATIO
+        rawRatio > MAX_LANDSCAPE_RATIO -> MAX_LANDSCAPE_RATIO
+        else -> rawRatio
+    }
 
     private fun applyFirstMediaAspectRatio(ratio: Float, screenWidth: Int) {
         if (firstMediaAspectRatio != null) return
