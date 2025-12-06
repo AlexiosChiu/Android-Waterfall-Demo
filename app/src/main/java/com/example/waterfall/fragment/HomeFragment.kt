@@ -1,5 +1,6 @@
 package com.example.waterfall.fragment
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -21,6 +22,7 @@ import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.Target
 import com.example.waterfall.R
 import com.example.waterfall.adapter.FeedAdapter
+import com.example.waterfall.data.FeedCacheManager
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.ResponseDTO
 import com.example.waterfall.view_model.HomePageViewModel
@@ -62,6 +64,20 @@ class HomeFragment : Fragment() {
     private var lastPreloadRange: IntRange? = null
     private lateinit var glideRequestManager: RequestManager
 
+    // 缓存历史推文用于首刷
+    private lateinit var feedCacheManager: FeedCacheManager
+    private var hasRestoredCache = false
+
+    // 图片预取 scope & 控制
+    private val imagePrefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val imagePreloadSemaphore = Semaphore(permits = 3)
+    private val preloadedImageUrls = mutableSetOf<String>()
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        feedCacheManager = FeedCacheManager(context.applicationContext)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
@@ -69,9 +85,15 @@ class HomeFragment : Fragment() {
         // 初始化Glide请求管理器
         glideRequestManager = Glide.with(this)
         setupViews(view)
-        setupObservers()
-        loadData()
         return view
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        setupObservers()
+        restoreCachedFeed()
+        loadData()
+        scrollToTop()
     }
 
     private fun setupViews(view: View) {
@@ -206,16 +228,10 @@ class HomeFragment : Fragment() {
     }
 
     private fun setupObservers() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collectLatest { state ->
-                if (state !is HomeUiState.Loading) {
-                    swipeRefreshLayout.isRefreshing = false
-                } else {
-                    swipeRefreshLayout.isRefreshing = true
-                }
-
+                swipeRefreshLayout.isRefreshing = state is HomeUiState.Loading
                 isLoading = state is HomeUiState.Loading
-
                 when (state) {
                     is HomeUiState.Success -> {
                         isLastPage = !viewModel.hasMore
@@ -232,7 +248,7 @@ class HomeFragment : Fragment() {
             }
         }
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.refreshEvent.collect { event ->
                 if (event is RefreshEvent.ScrollToTopAfterRefresh) {
                     shouldScrollToTopAfterRefresh = true
@@ -273,6 +289,53 @@ class HomeFragment : Fragment() {
         }.toList()
 
         submitFeedItems(feedItems)
+        persistFeedItems(feedItems)
+    }
+
+    private fun restoreCachedFeed() {
+        if (hasRestoredCache) return
+        hasRestoredCache = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val cachedItems = feedCacheManager.loadFeedItems()
+            if (cachedItems.isNotEmpty() && adapter.currentList.isEmpty()) {
+                submitFeedItems(cachedItems)
+                // 触发图片预取（将封面/clips/头像下载到 Glide 磁盘缓存）
+                prefetchImagesForItems(cachedItems)
+            }
+        }
+    }
+
+    private fun persistFeedItems(items: List<FeedItem>) {
+        val imageItems = items.filterIsInstance<FeedItem.ImageTextItem>()
+        if (imageItems.isEmpty()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            feedCacheManager.saveFeedItems(imageItems)
+            // 持久化后异步预取图片到 Glide 缓存
+            prefetchImagesForItems(imageItems)
+        }
+    }
+
+    private fun prefetchImagesForItems(items: List<FeedItem>) {
+        val urls = mutableSetOf<String>()
+        for (item in items.filterIsInstance<FeedItem.ImageTextItem>()) {
+            if (item.coverClip.isNotBlank()) urls.add(item.coverClip)
+            item.clips.filter { it.isNotBlank() }.forEach { urls.add(it) }
+            if (item.avatar.isNotBlank()) urls.add(item.avatar)
+        }
+
+        imagePrefetchScope.launch {
+            for (url in urls) {
+                if (!preloadedImageUrls.add(url)) continue
+                imagePreloadSemaphore.withPermit {
+                    try {
+                        val future = glideRequestManager.downloadOnly().load(url).submit()
+                        future.get()
+                    } catch (_: Exception) {
+                        // 忽略单个资源下载失败
+                    }
+                }
+            }
+        }
     }
 
     private fun submitFeedItems(items: List<FeedItem>) {
@@ -291,12 +354,15 @@ class HomeFragment : Fragment() {
     private fun resetPreloadState() {
         preloadedUrls.clear()
         lastPreloadRange = null
+        preloadedImageUrls.clear()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         videoCoverScope.cancel()
+        imagePrefetchScope.cancel()
         resetPreloadState()
+        hasRestoredCache = false
     }
 
     private fun setupSwipeRefresh(view: View) {
