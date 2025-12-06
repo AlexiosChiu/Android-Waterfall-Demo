@@ -3,8 +3,6 @@ package com.example.waterfall.holder
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
-import android.os.Handler
-import android.os.Looper
 import android.util.LruCache
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +13,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.graphics.scale
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -27,8 +26,14 @@ import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.LikePreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.resume
 
 class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapter) :
     ItemViewHolder(view) {
@@ -202,40 +207,26 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
         val cachedBitmap = videoFrameCache.get(videoUrl)
         if (cachedBitmap != null && !cachedBitmap.isRecycled) {
-            if (!isRecycled.get() && videoUrl == currentCoverKey) {
-                coverImage.setImageBitmap(cachedBitmap)
-            }
+            if (!isRecycled.get() && videoUrl == currentCoverKey) coverImage.setImageBitmap(
+                cachedBitmap
+            )
             return
         } else if (cachedBitmap != null) {
             videoFrameCache.remove(videoUrl)
         }
 
-        currentThumbnailExtractionTask = CoroutineScope(Dispatchers.IO).launch {
+        currentThumbnailExtractionTask = CoroutineScope(Dispatchers.Main).launch {
             try {
                 if (isRecycled.get() || currentCoverKey != requestKey) return@launch
 
                 val exoPlayer = ExoPlayer.Builder(view.context).build()
                 currentExoPlayer = exoPlayer
 
-                val mediaItem = MediaItem.fromUri(videoUrl)
-                exoPlayer.setMediaItem(mediaItem)
+                exoPlayer.setMediaItem(MediaItem.fromUri(videoUrl))
                 exoPlayer.prepare()
 
-                var retryCount = 0
-                while (
-                    exoPlayer.playbackState != Player.STATE_READY &&
-                    retryCount < 10 &&
-                    !isRecycled.get() &&
-                    currentCoverKey == requestKey
-                ) {
-                    kotlinx.coroutines.delay(100)
-                    retryCount++
-                }
-
-                if (exoPlayer.playbackState != Player.STATE_READY ||
-                    isRecycled.get() ||
-                    currentCoverKey != requestKey
-                ) {
+                val isReady = withTimeoutOrNull(1_500L) { exoPlayer.awaitReadyState() } ?: false
+                if (!isReady || isRecycled.get() || currentCoverKey != requestKey) {
                     exoPlayer.release()
                     if (currentExoPlayer === exoPlayer) currentExoPlayer = null
                     return@launch
@@ -250,9 +241,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
                 exoPlayer.release()
                 if (currentExoPlayer === exoPlayer) currentExoPlayer = null
-
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } catch (_: Exception) {
                 if (!isRecycled.get() && currentCoverKey == requestKey) {
                     fallbackToMediaMetadataRetriever(videoUrl, requestKey)
                 }
@@ -260,47 +249,60 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         }
     }
 
+    private suspend fun ExoPlayer.awaitReadyState(): Boolean =
+        suspendCancellableCoroutine { cont ->
+            if (playbackState == Player.STATE_READY) {
+                cont.resume(true)
+                return@suspendCancellableCoroutine
+            }
+
+            val listener = object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    if (state == Player.STATE_READY && cont.isActive) {
+                        removeListener(this)
+                        cont.resume(true)
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    if (cont.isActive) {
+                        removeListener(this)
+                        cont.resume(false)
+                    }
+                }
+            }
+
+            addListener(listener)
+            cont.invokeOnCancellation { removeListener(listener) }
+        }
+
     /**
      * 智能的MediaMetadataRetriever方案 - 优化性能
      */
+    private val thumbnailScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private var currentRetrieverJob: Job? = null
+
     private fun extractThumbnailWithSmartRetriever(videoUrl: String, requestKey: String?) {
-        // 在后台线程使用MediaMetadataRetriever提取视频帧
         if (requestKey == null) return
-
-        val videoTask = Thread {
+        currentRetrieverJob?.cancel()
+        currentRetrieverJob = thumbnailScope.launch {
             var bitmap: Bitmap? = null
-
             try {
-                if (isRecycled.get() || currentCoverKey != requestKey) return@Thread
-
+                if (isRecycled.get() || currentCoverKey != requestKey) return@launch
                 val retriever = MediaMetadataRetriever()
                 currentMediaRetriever = retriever
-
-                try {
-                    retriever.setDataSource(videoUrl, HashMap())
-                } catch (_: Exception) {
-                    retriever.setDataSource(videoUrl)
-                }
-
-                if (isRecycled.get() || currentCoverKey != requestKey) {
-                    releaseMediaRetriever()
-                    return@Thread
-                }
-
+                retriever.setDataSource(videoUrl, HashMap())
+                if (isRecycled.get() || currentCoverKey != requestKey) return@launch
                 bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-
-                if (bitmap != null && !isRecycled.get() && currentCoverKey == requestKey) {
-                    val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
-                    val scaleFactor = targetWidth / bitmap.width
-                    bitmap = bitmap.scale(
-                        targetWidth.toInt(),
-                        (bitmap.height * scaleFactor).toInt().coerceAtLeast(30)
-                    )
-                }
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-                bitmap = null
+                    ?.let { original ->
+                        val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
+                        val scaleFactor = targetWidth / original.width
+                        original.scale(
+                            targetWidth.toInt(),
+                            (original.height * scaleFactor).toInt().coerceAtLeast(30)
+                        )
+                    }
             } finally {
                 releaseMediaRetriever()
             }
@@ -313,22 +315,15 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                 synchronized(videoFrameCache) {
                     videoFrameCache.put(videoUrl, bitmap)
                 }
-
-                Handler(Looper.getMainLooper()).post {
-                    if (
-                        !bitmap.isRecycled && !isRecycled.get() && coverImage.isAttachedToWindow && currentCoverKey == requestKey
-                    ) {
-                        val fadeIn = AlphaAnimation(0.5f, 1.0f)
-                        fadeIn.duration = 300
+                withContext(Dispatchers.Main) {
+                    if (!bitmap.isRecycled && coverImage.isAttachedToWindow && currentCoverKey == requestKey) {
+                        val fadeIn = AlphaAnimation(0.5f, 1.0f).apply { duration = 300 }
                         coverImage.startAnimation(fadeIn)
                         coverImage.setImageBitmap(bitmap)
                     }
                 }
             }
         }
-
-        currentVideoTask = videoTask
-        videoTask.start()
     }
 
     /**
