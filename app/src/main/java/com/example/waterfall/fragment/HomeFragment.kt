@@ -16,6 +16,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.RequestManager
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.request.RequestOptions
+import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.signature.ObjectKey
 import com.example.waterfall.R
 import com.example.waterfall.adapter.FeedAdapter
@@ -41,10 +42,15 @@ class HomeFragment : Fragment() {
     private var shouldScrollToTopAfterRefresh = false
     private var isColumnWidthReady = false
     private var pendingFeedItems: List<FeedItem>? = null
+    private var columnWidth: Int = 0
 
     // 预加载相关常量
-    private val PRELOAD_AHEAD_DISTANCE = 5 // 预加载可见项前面的数量
-    private val PRELOAD_BEHIND_DISTANCE = 5 // 预加载可见项后面的数量
+    private val PRELOAD_AHEAD_DISTANCE = 3 // 预加载可见项前面的数量
+    private val PRELOAD_BEHIND_DISTANCE = 3 // 预加载可见项后面的数量
+
+    // 预加载视频封面
+    private val preloadedUrls = mutableSetOf<String>()
+    private var lastPreloadRange: IntRange? = null
     private lateinit var glideRequestManager: RequestManager
 
     override fun onCreateView(
@@ -94,10 +100,7 @@ class HomeFragment : Fragment() {
                         if (firstVisibleItemPositions.isNotEmpty()) {
                             val firstVisibleItemPosition =
                                 firstVisibleItemPositions.minOrNull() ?: 0
-                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount &&
-                                firstVisibleItemPosition >= 0 &&
-                                totalItemCount >= 4
-                            ) {
+                            if ((visibleItemCount + firstVisibleItemPosition) >= totalItemCount && firstVisibleItemPosition >= 0 && totalItemCount >= 4) {
                                 loadMoreData()
                             }
                         }
@@ -111,8 +114,9 @@ class HomeFragment : Fragment() {
                 recyclerView.layoutManager as? StaggeredGridLayoutManager ?: return@doOnLayout
             val spanCount = layoutManager.spanCount
             if (spanCount <= 0 || recyclerView.width <= 0) return@doOnLayout
-            val columnWidth = recyclerView.width / spanCount
-            adapter.setColumnWidth(columnWidth)
+            val calculatedColumnWidth = recyclerView.width / spanCount
+            columnWidth = calculatedColumnWidth
+            adapter.setColumnWidth(calculatedColumnWidth)
             isColumnWidthReady = true
             pendingFeedItems?.let { items ->
                 pendingFeedItems = null
@@ -120,10 +124,6 @@ class HomeFragment : Fragment() {
             }
         }
     }
-
-    // 预加载视频封面
-    private val preloadedUrls = mutableSetOf<String>()
-    private var lastPreloadPosition = -1
 
     private fun preloadVideoCovers() {
         val layoutManager = recyclerView.layoutManager as? StaggeredGridLayoutManager ?: return
@@ -143,21 +143,22 @@ class HomeFragment : Fragment() {
         val lastVisiblePosition = lastVisibleItems.maxOrNull() ?: 0
 
         // 防抖：只有当可见项位置变化较大时才重新预加载
-        if (abs(firstVisiblePosition - lastPreloadPosition) < 5) {
-            return
-        }
-        lastPreloadPosition = firstVisiblePosition
-
-        // 计算预加载范围
         val startPreloadPosition = (firstVisiblePosition - PRELOAD_BEHIND_DISTANCE).coerceAtLeast(0)
         val endPreloadPosition =
             (lastVisiblePosition + PRELOAD_AHEAD_DISTANCE).coerceAtMost(feedItems.size - 1)
+        val preloadRange = startPreloadPosition..endPreloadPosition
+        val previousRange = lastPreloadRange
+        if (previousRange != null && abs(preloadRange.first - previousRange.first) < 2 && abs(
+                preloadRange.last - previousRange.last
+            ) < 2
+        ) {
+            return
+        }
+        lastPreloadRange = preloadRange
 
-        // 对预加载范围内的视频项进行预加载
-        for (position in startPreloadPosition..endPreloadPosition) {
+        for (position in preloadRange) {
             val item = feedItems[position]
             if (item is FeedItem.ImageTextItem) {
-                // 检查是否为视频URL
                 if (isVideoUrl(item.coverClip) && !preloadedUrls.contains(item.coverClip)) {
                     preloadVideoFrame(item.coverClip)
                 }
@@ -167,23 +168,17 @@ class HomeFragment : Fragment() {
 
     private fun isVideoUrl(url: String): Boolean {
         val lowerUrl = url.lowercase()
-        return lowerUrl.endsWith(".mp4") ||
-                lowerUrl.endsWith(".webm") ||
-                lowerUrl.endsWith(".m3u8")
+        return lowerUrl.endsWith(".mp4") || lowerUrl.endsWith(".webm") || lowerUrl.endsWith(".m3u8")
     }
 
     private fun preloadVideoFrame(videoUrl: String) {
         preloadedUrls.add(videoUrl)
-        glideRequestManager
-            .asBitmap()
-            .load(videoUrl)
-            .apply(
-                RequestOptions()
-                    .frame(0)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .signature(ObjectKey("${videoUrl}_frame_preload"))
-            )
-            .preload()
+        var options = RequestOptions().frame(0).diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+            .signature(ObjectKey("${videoUrl}_frame_preload"))
+        if (columnWidth > 0) {
+            options = options.override(columnWidth, Target.SIZE_ORIGINAL)
+        }
+        glideRequestManager.asBitmap().load(videoUrl).apply(options).preload()
     }
 
     private fun setupObservers() {
@@ -231,10 +226,7 @@ class HomeFragment : Fragment() {
     }
 
     private fun updateAdapterData(posts: List<ResponseDTO.Post>) {
-        val feedItems = posts
-            .asSequence()
-            .filter { !it.clips.isNullOrEmpty() }
-            .map { post ->
+        val feedItems = posts.asSequence().filter { !it.clips.isNullOrEmpty() }.map { post ->
                 val firstClip = post.clips!!.first()
                 FeedItem.ImageTextItem(
                     id = post.postId,
@@ -251,13 +243,13 @@ class HomeFragment : Fragment() {
                     createTime = post.createTime,
                     hashTags = post.hashtag ?: emptyList()
                 )
-            }
-            .toList()
+        }.toList()
 
         submitFeedItems(feedItems)
     }
 
     private fun submitFeedItems(items: List<FeedItem>) {
+        resetPreloadState()
         if (isColumnWidthReady) {
             adapter.submitList(items) {
                 if (shouldScrollToTopAfterRefresh) {
@@ -267,6 +259,16 @@ class HomeFragment : Fragment() {
         } else {
             pendingFeedItems = items
         }
+    }
+
+    private fun resetPreloadState() {
+        preloadedUrls.clear()
+        lastPreloadRange = null
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        resetPreloadState()
     }
 
     private fun setupSwipeRefresh(view: View) {

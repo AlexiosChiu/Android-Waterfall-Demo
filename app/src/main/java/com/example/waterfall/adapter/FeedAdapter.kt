@@ -1,6 +1,5 @@
 package com.example.waterfall.adapter
 
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -78,16 +77,10 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
     private fun calculateTargetHeight(
         originalWidth: Int, originalHeight: Int, targetWidth: Int
     ): Int {
-        Log.i(
-            "FeedAdapter",
-            "calculateTargetHeight: originalWidth=$originalWidth, originalHeight=$originalHeight, targetWidth=$targetWidth"
-        )
+
         if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
         val ratio = (originalWidth.toFloat() / originalHeight.toFloat()).coerceIn(0.75f, 1.333f)
-        Log.i(
-            "FeedAdapter",
-            "calculateTargetHeight: ratio=$ratio, targetHeight=${(targetWidth / ratio).roundToInt()}"
-        )
+
         return (targetWidth / ratio).roundToInt()
     }
 

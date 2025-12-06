@@ -3,6 +3,7 @@ package com.example.waterfall.holder
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.util.LruCache
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +12,7 @@ import android.view.animation.ScaleAnimation
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.annotation.RequiresApi
 import androidx.core.graphics.scale
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -50,7 +52,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     // 添加用于取消操作的标志和任务引用
     private val isRecycled = AtomicBoolean(false)
     private var currentVideoTask: Thread? = null
-    private var currentMediaRetriever: MediaMetadataRetriever? = null
+
     private var currentThumbnailExtractionTask: kotlinx.coroutines.Job? = null
     private var currentExoPlayer: ExoPlayer? = null
 
@@ -66,16 +68,14 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             }
 
             override fun entryRemoved(
-                evicted: Boolean,
-                key: String,
-                oldValue: Bitmap,
-                newValue: Bitmap?
+                evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?
             ) {
                 // 当缓存项被移除时，不需要手动回收，LruCache会自动处理
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun bind(item: FeedItem) {
         // 立即取消所有之前的异步任务
         recycle()
@@ -151,10 +151,11 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         // 取消Glide加载
         Glide.with(coverImage).clear(coverImage)
 
-        // 释放MediaMetadataRetriever
-        releaseMediaRetriever()
+        currentRetrieverJob?.cancel()
+        currentRetrieverJob = null
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun loadImage(imageUrl: String) {
         currentCoverKey = imageUrl
         // 立即清除当前图片，避免显示旧数据
@@ -176,18 +177,13 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             val targetHeight = coverImage.layoutParams?.height?.takeIf { it > 0 } ?: targetWidth
 
             // 快速加载模糊的低分辨率版本
-            val lowQualityRequest = Glide.with(coverImage.context)
-                .load(imageUrl)
-                .override(10) // 超低分辨率预览
-                .dontAnimate()
+            val lowQualityRequest =
+                Glide.with(coverImage.context).load(imageUrl).override(10) // 超低分辨率预览
+                    .dontAnimate()
 
-            Glide.with(coverImage.context)
-                .load(imageUrl)
-                .thumbnail(lowQualityRequest)
-                .override(targetWidth, targetHeight)
-                .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                .dontAnimate()
-                .into(coverImage)
+            Glide.with(coverImage.context).load(imageUrl).thumbnail(lowQualityRequest)
+                .override(targetWidth, targetHeight).diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                .dontAnimate().into(coverImage)
 
             return
         }
@@ -199,6 +195,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     /**
      * 使用ExoPlayer提取视频缩略图
      */
+    @RequiresApi(Build.VERSION_CODES.Q)
     @androidx.annotation.OptIn(UnstableApi::class)
     private fun extractThumbnailWithExoPlayer(videoUrl: String) {
         val requestKey = currentCoverKey ?: return
@@ -248,32 +245,31 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         }
     }
 
-    private suspend fun ExoPlayer.awaitReadyState(): Boolean =
-        suspendCancellableCoroutine { cont ->
-            if (playbackState == Player.STATE_READY) {
-                cont.resume(true)
-                return@suspendCancellableCoroutine
-            }
-
-            val listener = object : Player.Listener {
-                override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY && cont.isActive) {
-                        removeListener(this)
-                        cont.resume(true)
-                    }
-                }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    if (cont.isActive) {
-                        removeListener(this)
-                        cont.resume(false)
-                    }
-                }
-            }
-
-            addListener(listener)
-            cont.invokeOnCancellation { removeListener(listener) }
+    private suspend fun ExoPlayer.awaitReadyState(): Boolean = suspendCancellableCoroutine { cont ->
+        if (playbackState == Player.STATE_READY) {
+            cont.resume(true)
+            return@suspendCancellableCoroutine
         }
+
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY && cont.isActive) {
+                    removeListener(this)
+                    cont.resume(true)
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (cont.isActive) {
+                    removeListener(this)
+                    cont.resume(false)
+                }
+            }
+        }
+
+        addListener(listener)
+        cont.invokeOnCancellation { removeListener(listener) }
+    }
 
     /**
      * 智能的MediaMetadataRetriever方案 - 优化性能
@@ -282,38 +278,28 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
     private var currentRetrieverJob: Job? = null
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun extractThumbnailWithSmartRetriever(videoUrl: String, requestKey: String?) {
         if (requestKey == null) return
         currentRetrieverJob?.cancel()
         currentRetrieverJob = thumbnailScope.launch {
-            var bitmap: Bitmap? = null
-            try {
-                if (isRecycled.get() || currentCoverKey != requestKey) return@launch
-                val retriever = MediaMetadataRetriever()
-                currentMediaRetriever = retriever
-                retriever.setDataSource(videoUrl, HashMap())
-                if (isRecycled.get() || currentCoverKey != requestKey) return@launch
-                bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    ?.let { original ->
-                        val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
-                        val scaleFactor = targetWidth / original.width
-                        original.scale(
-                            targetWidth.toInt(),
-                            (original.height * scaleFactor).toInt().coerceAtLeast(30)
-                        )
-                    }
-            } finally {
-                releaseMediaRetriever()
-            }
-
-            if (bitmap != null &&
-                !bitmap.isRecycled &&
-                !isRecycled.get() &&
-                currentCoverKey == requestKey
-            ) {
-                synchronized(videoFrameCache) {
-                    videoFrameCache.put(videoUrl, bitmap)
+            val bitmap = runCatching {
+                MediaMetadataRetriever().use { retriever ->
+                    retriever.setDataSource(videoUrl, emptyMap())
+                    retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        ?.let { original ->
+                            val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
+                            val scaleFactor = targetWidth / original.width
+                            original.scale(
+                                targetWidth.toInt(),
+                                (original.height * scaleFactor).toInt().coerceAtLeast(30)
+                            )
+                        }
                 }
+            }.getOrNull()
+
+            if (bitmap != null && !bitmap.isRecycled && !isRecycled.get() && currentCoverKey == requestKey) {
+                synchronized(videoFrameCache) { videoFrameCache.put(videoUrl, bitmap) }
                 withContext(Dispatchers.Main) {
                     if (!bitmap.isRecycled && coverImage.isAttachedToWindow && currentCoverKey == requestKey) {
                         val fadeIn = AlphaAnimation(0.5f, 1.0f).apply { duration = 300 }
@@ -328,18 +314,9 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     /**
      * 回退方案：使用MediaMetadataRetriever
      */
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun fallbackToMediaMetadataRetriever(imageUrl: String, requestKey: String?) {
         extractThumbnailWithSmartRetriever(imageUrl, requestKey)
-    }
-
-    private fun releaseMediaRetriever() {
-        try {
-            currentMediaRetriever?.release()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        } finally {
-            currentMediaRetriever = null
-        }
     }
 
     private fun setupInteractionButtons(item: FeedItem.ImageTextItem) {
@@ -353,9 +330,14 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
             )
 
             val anim = ScaleAnimation(
-                0.8f, 1.0f, 0.8f, 1.0f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+                0.8f,
+                1.0f,
+                0.8f,
+                1.0f,
+                ScaleAnimation.RELATIVE_TO_SELF,
+                0.5f,
+                ScaleAnimation.RELATIVE_TO_SELF,
+                0.5f
             )
             anim.duration = 150
             likeButton.startAnimation(anim)
