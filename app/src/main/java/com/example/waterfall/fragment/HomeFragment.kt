@@ -96,6 +96,13 @@ class HomeFragment : Fragment() {
         scrollToTop()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (this::recyclerView.isInitialized && this::adapter.isInitialized) {
+            recyclerView.post { adapter.notifyDataSetChanged() }
+        }
+    }
+
     private fun setupViews(view: View) {
         setupSwipeRefresh(view)
         setupRecyclerView(view)

@@ -106,7 +106,7 @@ class PostPageActivity : AppCompatActivity() {
         }
 
         likeButton.setOnClickListener {
-            viewModel.likePost()
+            viewModel.likePost()       // 通知后端
             val anim = ScaleAnimation(
                 0.8f,
                 1.0f,
@@ -159,6 +159,7 @@ class PostPageActivity : AppCompatActivity() {
         viewPager.post {
             mediaAdapter.playAt(viewPager.currentItem)
         }
+        updateUI(postItem) // 立即展示当前内容
     }
 
     private fun showShareBottomSheet() {
@@ -285,17 +286,14 @@ class PostPageActivity : AppCompatActivity() {
     }
 
     private fun updateUI(postItem: FeedItem.ImageTextItem) {
+        this.postItem = postItem
         authorName.text = postItem.authorName
         title.text = postItem.title
         setupContentWithHashTags()
         postTime.text = getPostTimeText(postItem.createTime)
-        likes.text = postItem.likes.toString()
+        updateLikeUi(postItem)
 
         Glide.with(this).load(postItem.avatar).circleCrop().into(avatar)
-
-        likeButton.setImageResource(
-            if (postItem.liked) R.drawable.like_icon_big_red else R.drawable.like_icon_big
-        )
 
         val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
         val subKey = "subscribed_${postItem.createTime}"
@@ -426,5 +424,12 @@ class PostPageActivity : AppCompatActivity() {
     private fun releaseMusicPlayer() {
         musicPlayer?.release()
         musicPlayer = null
+    }
+
+    private fun updateLikeUi(item: FeedItem.ImageTextItem) {
+        likes.text = item.likes.toString()
+        likeButton.setImageResource(
+            if (item.liked) R.drawable.like_icon_big_red else R.drawable.like_icon_big
+        )
     }
 }
