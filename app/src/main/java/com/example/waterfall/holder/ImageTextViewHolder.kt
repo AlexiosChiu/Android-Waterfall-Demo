@@ -16,6 +16,7 @@ import android.widget.TextView
 import androidx.core.graphics.scale
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -31,6 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapter) :
     ItemViewHolder(view) {
+    @Volatile
+    private var currentCoverKey: String? = null
     private val avatar: ImageView = view.findViewById(R.id.avatar)
     private val authorName: TextView = view.findViewById(R.id.author_name)
     private val title: TextView = view.findViewById(R.id.post_title)
@@ -75,6 +78,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
         isRecycled.set(false)
 
         if (item is FeedItem.ImageTextItem) {
+            currentCoverKey = item.coverClip
             prefs = LikePreferences(view.context)
 
             val targetWidth = adapter.getColumnWidth()
@@ -112,6 +116,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
 
     // 添加recycle方法，在ViewHolder被回收时调用
     fun recycle() {
+        currentCoverKey = null
         // 标记为已回收
         isRecycled.set(true)
 
@@ -146,6 +151,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     }
 
     private fun loadImage(imageUrl: String) {
+        currentCoverKey = imageUrl
         // 立即清除当前图片，避免显示旧数据
         coverImage.setImageDrawable(null)
 
@@ -189,64 +195,66 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     /**
      * 使用ExoPlayer提取视频缩略图
      */
+    @androidx.annotation.OptIn(UnstableApi::class)
     private fun extractThumbnailWithExoPlayer(videoUrl: String) {
-        // 1. 首先检查缓存中是否已有该视频的帧
+        val requestKey = currentCoverKey ?: return
+        if (isRecycled.get() || videoUrl != requestKey) return
+
         val cachedBitmap = videoFrameCache.get(videoUrl)
         if (cachedBitmap != null && !cachedBitmap.isRecycled) {
-            coverImage.setImageBitmap(cachedBitmap)
-            return // 使用缓存的帧，不再进行加载
+            if (!isRecycled.get() && videoUrl == currentCoverKey) {
+                coverImage.setImageBitmap(cachedBitmap)
+            }
+            return
         } else if (cachedBitmap != null) {
-            // 缓存中的bitmap已被回收，移除缓存
             videoFrameCache.remove(videoUrl)
         }
 
-        // 2. 使用协程在后台执行缩略图提取
         currentThumbnailExtractionTask = CoroutineScope(Dispatchers.IO).launch {
             try {
-                // 检查是否已被回收
-                if (isRecycled.get()) return@launch
+                if (isRecycled.get() || currentCoverKey != requestKey) return@launch
 
-                // 创建ExoPlayer实例
                 val exoPlayer = ExoPlayer.Builder(view.context).build()
                 currentExoPlayer = exoPlayer
 
-                // 创建MediaItem
                 val mediaItem = MediaItem.fromUri(videoUrl)
-
-                // 设置媒体项并准备播放器
                 exoPlayer.setMediaItem(mediaItem)
                 exoPlayer.prepare()
 
-                // 等待播放器准备完成
                 var retryCount = 0
-                while (exoPlayer.playbackState != Player.STATE_READY && retryCount < 10 && !isRecycled.get()) {
+                while (
+                    exoPlayer.playbackState != Player.STATE_READY &&
+                    retryCount < 10 &&
+                    !isRecycled.get() &&
+                    currentCoverKey == requestKey
+                ) {
                     kotlinx.coroutines.delay(100)
                     retryCount++
                 }
 
-                if (exoPlayer.playbackState != Player.STATE_READY || isRecycled.get()) {
+                if (exoPlayer.playbackState != Player.STATE_READY ||
+                    isRecycled.get() ||
+                    currentCoverKey != requestKey
+                ) {
                     exoPlayer.release()
+                    if (currentExoPlayer === exoPlayer) currentExoPlayer = null
                     return@launch
                 }
 
-                // 获取视频信息
                 val videoFormat = exoPlayer.videoFormat
                 if (videoFormat != null) {
-                    extractThumbnailWithSmartRetriever(videoUrl)
+                    extractThumbnailWithSmartRetriever(videoUrl, requestKey)
                 } else {
-                    // 如果无法获取视频格式，使用传统方法
-                    fallbackToMediaMetadataRetriever(videoUrl)
+                    fallbackToMediaMetadataRetriever(videoUrl, requestKey)
                 }
 
-                // 释放ExoPlayer资源
                 exoPlayer.release()
-                currentExoPlayer = null
+                if (currentExoPlayer === exoPlayer) currentExoPlayer = null
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                // 如果ExoPlayer方法失败，回退到MediaMetadataRetriever
-                if (!isRecycled.get()) {
-                    fallbackToMediaMetadataRetriever(videoUrl)
+                if (!isRecycled.get() && currentCoverKey == requestKey) {
+                    fallbackToMediaMetadataRetriever(videoUrl, requestKey)
                 }
             }
         }
@@ -255,48 +263,35 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     /**
      * 智能的MediaMetadataRetriever方案 - 优化性能
      */
-    private fun extractThumbnailWithSmartRetriever(videoUrl: String) {
+    private fun extractThumbnailWithSmartRetriever(videoUrl: String, requestKey: String?) {
         // 在后台线程使用MediaMetadataRetriever提取视频帧
+        if (requestKey == null) return
+
         val videoTask = Thread {
-            var bitmap: Bitmap?
+            var bitmap: Bitmap? = null
 
             try {
-                // 创建新的MediaMetadataRetriever
+                if (isRecycled.get() || currentCoverKey != requestKey) return@Thread
+
                 val retriever = MediaMetadataRetriever()
                 currentMediaRetriever = retriever
 
-                // 检查是否已被回收，如果是则退出
-                if (isRecycled.get()) {
-                    releaseMediaRetriever()
-                    return@Thread
-                }
-
-                // 设置数据源，尝试处理网络视频URL
                 try {
-                    retriever.setDataSource(videoUrl, HashMap<String, String>())
+                    retriever.setDataSource(videoUrl, HashMap())
                 } catch (_: Exception) {
-                    // 如果带headers的方法失败，尝试简单设置
                     retriever.setDataSource(videoUrl)
                 }
 
-                // 再次检查是否已被回收
-                if (isRecycled.get()) {
+                if (isRecycled.get() || currentCoverKey != requestKey) {
                     releaseMediaRetriever()
                     return@Thread
                 }
 
-                // 获取第0毫秒的帧 - 使用更小的分辨率选项
                 bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
 
-                // 对获取到的bitmap进行缩放处理 - 使用更小的目标尺寸
-                if (bitmap != null && !isRecycled.get()) {
-                    // 计算目标尺寸（使用50%的列宽，实现低分辨率）
+                if (bitmap != null && !isRecycled.get() && currentCoverKey == requestKey) {
                     val targetWidth = (adapter.getColumnWidth() * 0.5f).coerceAtLeast(50f)
-
-                    // 计算缩放比例，确保图片按比例缩放
                     val scaleFactor = targetWidth / bitmap.width
-
-                    // 创建缩放后的bitmap
                     bitmap = bitmap.scale(
                         targetWidth.toInt(),
                         (bitmap.height * scaleFactor).toInt().coerceAtLeast(30)
@@ -307,37 +302,31 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
                 e.printStackTrace()
                 bitmap = null
             } finally {
-                // 释放MediaMetadataRetriever
                 releaseMediaRetriever()
             }
 
-            // 只在成功获取到有效bitmap且ViewHolder未被回收时才更新UI
-            // 只在成功获取到有效bitmap且ViewHolder未被回收时才更新UI
-            if (bitmap != null && !bitmap.isRecycled && !isRecycled.get()) {
-                // 缓存获取到的帧
+            if (bitmap != null &&
+                !bitmap.isRecycled &&
+                !isRecycled.get() &&
+                currentCoverKey == requestKey
+            ) {
                 synchronized(videoFrameCache) {
                     videoFrameCache.put(videoUrl, bitmap)
                 }
 
-                // 在主线程平滑过渡到视频帧
                 Handler(Looper.getMainLooper()).post {
-                    try {
-                        // 再次检查bitmap是否有效且ImageView是否存在且ViewHolder未被回收
-                        if (bitmap != null && !bitmap.isRecycled && !isRecycled.get() && coverImage.isAttachedToWindow) {
-                            // 添加淡入动画使过渡更平滑
-                            val fadeIn = AlphaAnimation(0.5f, 1.0f)
-                            fadeIn.duration = 300
-                            coverImage.startAnimation(fadeIn)
-                            coverImage.setImageBitmap(bitmap)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    if (
+                        !bitmap.isRecycled && !isRecycled.get() && coverImage.isAttachedToWindow && currentCoverKey == requestKey
+                    ) {
+                        val fadeIn = AlphaAnimation(0.5f, 1.0f)
+                        fadeIn.duration = 300
+                        coverImage.startAnimation(fadeIn)
+                        coverImage.setImageBitmap(bitmap)
                     }
                 }
             }
         }
 
-        // 保存任务引用并启动
         currentVideoTask = videoTask
         videoTask.start()
     }
@@ -345,11 +334,10 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     /**
      * 回退方案：使用MediaMetadataRetriever
      */
-    private fun fallbackToMediaMetadataRetriever(imageUrl: String) {
-        extractThumbnailWithSmartRetriever(imageUrl)
+    private fun fallbackToMediaMetadataRetriever(imageUrl: String, requestKey: String?) {
+        extractThumbnailWithSmartRetriever(imageUrl, requestKey)
     }
 
-    // 安全释放MediaMetadataRetriever资源
     private fun releaseMediaRetriever() {
         try {
             currentMediaRetriever?.release()
@@ -363,12 +351,7 @@ class ImageTextViewHolder(private val view: View, private val adapter: FeedAdapt
     private fun setupInteractionButtons(item: FeedItem.ImageTextItem) {
         likeButton.setOnClickListener {
             item.liked = !item.liked
-
-            if (item.liked) {
-                item.likes += 1
-            } else {
-                item.likes = (item.likes - 1).coerceAtLeast(0)
-            }
+            item.likes = if (item.liked) item.likes + 1 else (item.likes - 1).coerceAtLeast(0)
 
             likes.text = item.likes.toString()
             likeButton.setImageResource(
