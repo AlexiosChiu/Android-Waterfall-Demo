@@ -267,7 +267,8 @@ class HomeFragment : Fragment() {
 
     private fun updateAdapterData(posts: List<ResponseDTO.Post>) {
         val feedItems = posts.asSequence().filter { !it.clips.isNullOrEmpty() }.map { post ->
-            val firstClip = post.clips!!.first()
+            val clips = post.clips!!
+            val coverClip = selectCoverClip(clips)
             FeedItem.ImageTextItem(
                 id = post.postId,
                 avatar = post.author.avatar,
@@ -275,9 +276,9 @@ class HomeFragment : Fragment() {
                 title = post.title,
                 content = post.content,
                 clips = post.clips.map { it.url },
-                coverClip = firstClip.url,
-                coverHeight = firstClip.height,
-                coverWidth = firstClip.width,
+                coverClip = coverClip.url,
+                coverHeight = coverClip.height,
+                coverWidth = coverClip.width,
                 likes = 0,
                 liked = false,
                 createTime = post.createTime,
@@ -290,6 +291,12 @@ class HomeFragment : Fragment() {
 
         submitFeedItems(feedItems)
         persistFeedItems(feedItems)
+    }
+
+    private fun selectCoverClip(clips: List<ResponseDTO.Clip>): ResponseDTO.Clip {
+        val firstClip = clips.first()
+        if (!isVideoUrl(firstClip.url)) return firstClip
+        return clips.firstOrNull { !isVideoUrl(it.url) } ?: firstClip
     }
 
     private fun restoreCachedFeed() {
