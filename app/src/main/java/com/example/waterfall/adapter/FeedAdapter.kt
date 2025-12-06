@@ -83,8 +83,8 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
         targetWidth: Int
     ): Int {
         if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
-        val ratio = (originalHeight.toFloat() / originalWidth).coerceIn(0.75f, 1.333f)
-        return (targetWidth * ratio).roundToInt()
+        val ratio = (originalWidth.toFloat() / originalHeight.toFloat()).coerceIn(0.75f, 1.333f)
+        return (targetWidth / ratio).roundToInt()
     }
 
     private fun isVideoUrl(url: String): Boolean {

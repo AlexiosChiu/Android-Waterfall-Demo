@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.waterfall.R
@@ -85,7 +86,7 @@ class PostPageActivity : AppCompatActivity() {
         subscribeButton.setOnClickListener {
             val current = prefs.getBoolean(subKey, false)
             val newState = !current
-            prefs.edit().putBoolean(subKey, newState).apply()
+            prefs.edit { putBoolean(subKey, newState) }
             updateSubscribeUi(newState)
         }
 

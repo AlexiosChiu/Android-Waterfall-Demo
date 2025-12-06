@@ -1,4 +1,3 @@
-// Kotlin
 package com.example.waterfall.adapter
 
 import android.graphics.Bitmap
@@ -78,7 +77,7 @@ class PostPageViewPagerAdapter(
             Glide.with(holder.itemView.context)
                 .load(url)
                 .apply(RequestOptions().centerCrop())
-                .listener(glideListener(holder, captureFirst))
+                .listener(glideListener())
                 .into(holder.imageView)
         } else if (holder is VideoViewHolder) {
             bindVideo(holder, url, position)
@@ -192,7 +191,7 @@ class PostPageViewPagerAdapter(
         holder.playerView.useController = true
     }
 
-    private fun glideListener(holder: ImageViewHolder, captureFirst: Boolean) =
+    private fun glideListener() =
         object : RequestListener<Drawable> {
             override fun onLoadFailed(
                 e: GlideException?,
