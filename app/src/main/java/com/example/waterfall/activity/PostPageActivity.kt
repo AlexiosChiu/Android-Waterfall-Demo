@@ -19,11 +19,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.example.waterfall.R
 import com.example.waterfall.adapter.PostPageViewPagerAdapter
 import com.example.waterfall.data.FeedItem
 import com.example.waterfall.data.HashtagClickableSpan
+import com.example.waterfall.data.PlaybackSettings
 import com.example.waterfall.view_model.PostPageUiState
 import com.example.waterfall.view_model.PostPageViewModel
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -48,16 +52,24 @@ class PostPageActivity : AppCompatActivity() {
     private lateinit var subscribeButton: ImageView
     private lateinit var shareButton: ImageView
     private lateinit var progressBar: ProgressBar
+    private lateinit var muteButton: ImageView
+    private var isMuted: Boolean = PlaybackSettings.isMuted
+    private var musicBaseVolume: Float = 1f
 
     private val prefsName = "post_prefs"
 
     private lateinit var mediaAdapter: PostPageViewPagerAdapter
+
+    private var musicPlayer: ExoPlayer? = null
+    private var musicStartPositionMs: Long = 0L
+    private var currentMusicUrl: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.post_page_layout)
         postItem = intent.getParcelableExtra("POST_ITEM") ?: return
         initViews()
+        prepareMusicPlayback(postItem)
         setupObservers()
         setupBackButton()
 
@@ -77,6 +89,9 @@ class PostPageActivity : AppCompatActivity() {
         shareButton = findViewById(R.id.share_icon)
         progressBar = findViewById(R.id.viewpager_progress)
         progressBar.bringToFront()
+        muteButton = findViewById(R.id.sound_icon)
+        muteButton.setOnClickListener { toggleMute() }
+        updateMuteIcon()
 
         val prefs = getSharedPreferences(prefsName, MODE_PRIVATE)
         val subKey = "subscribed_${postItem.createTime}"
@@ -93,9 +108,14 @@ class PostPageActivity : AppCompatActivity() {
         likeButton.setOnClickListener {
             viewModel.likePost()
             val anim = ScaleAnimation(
-                0.8f, 1.0f, 0.8f, 1.0f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f,
-                ScaleAnimation.RELATIVE_TO_SELF, 0.5f
+                0.8f,
+                1.0f,
+                0.8f,
+                1.0f,
+                ScaleAnimation.RELATIVE_TO_SELF,
+                0.5f,
+                ScaleAnimation.RELATIVE_TO_SELF,
+                0.5f
             )
             anim.duration = 150
             likeButton.startAnimation(anim)
@@ -167,8 +187,7 @@ class PostPageActivity : AppCompatActivity() {
     }
 
     private fun setupShareOptions(
-        view: View,
-        bottomSheetDialog: BottomSheetDialog
+        view: View, bottomSheetDialog: BottomSheetDialog
     ) {
         val shareOptions: List<View> = listOf(
             view.findViewById(R.id.share_wechat),
@@ -195,10 +214,19 @@ class PostPageActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::mediaAdapter.isInitialized) {
+            mediaAdapter.playAt(viewPager.currentItem)
+        }
+        resumeMusic()
+    }
+
     override fun onPause() {
         super.onPause()
         // 暂停所有视频以避免后台播放
         if (::mediaAdapter.isInitialized) mediaAdapter.pauseAll()
+        pauseMusic()
     }
 
     override fun onDestroy() {
@@ -206,6 +234,7 @@ class PostPageActivity : AppCompatActivity() {
             mediaAdapter.release()
             viewPager.adapter = null
         }
+        releaseMusicPlayer()
         super.onDestroy()
     }
 
@@ -269,6 +298,8 @@ class PostPageActivity : AppCompatActivity() {
         val subKey = "subscribed_${postItem.createTime}"
         val isSubscribed = prefs.getBoolean(subKey, false)
         updateSubscribeUi(isSubscribed)
+
+        prepareMusicPlayback(postItem)
     }
 
     private fun getPostTimeText(createTime: Long): String {
@@ -316,19 +347,81 @@ class PostPageActivity : AppCompatActivity() {
 
             val tagText = textStr.substring(start, end)
             val span = HashtagClickableSpan(
-                hashTag = tagText,
-                color = hashtagColor,
-                onClick = { tag ->
+                hashTag = tagText, color = hashtagColor, onClick = { tag ->
                     val intent = Intent(this, HashTagPageActivity::class.java)
                     intent.putExtra("hashTag", tag)
                     startActivity(intent)
-                }
-            )
+                })
             spannable.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
         content.text = spannable
         content.movementMethod = LinkMovementMethod.getInstance()
         content.highlightColor = Color.TRANSPARENT
+    }
+
+    private fun prepareMusicPlayback(item: FeedItem.ImageTextItem) {
+        val musicUrl = item.musicUrl
+        if (musicUrl.isNullOrBlank()) {
+            releaseMusicPlayer()
+            currentMusicUrl = null
+            return
+        }
+        if (currentMusicUrl == musicUrl && musicPlayer != null) {
+            musicStartPositionMs = (item.musicSeekTime ?: 0) * 1000L
+            musicBaseVolume = ((item.musicVolume ?: 100).coerceIn(0, 100)) / 100f
+            applyMuteStateToMusic()
+            return
+        }
+        releaseMusicPlayer()
+        musicPlayer = ExoPlayer.Builder(this).build().apply {
+            repeatMode = Player.REPEAT_MODE_ALL
+            setMediaItem(MediaItem.fromUri(musicUrl))
+            prepare()
+        }
+        currentMusicUrl = musicUrl
+        musicBaseVolume = ((item.musicVolume ?: 100).coerceIn(0, 100)) / 100f
+        musicStartPositionMs = (item.musicSeekTime ?: 0) * 1000L
+        applyMuteStateToMusic()
+    }
+
+    private fun resumeMusic() {
+        val player = musicPlayer ?: return
+        val minStart = (postItem.musicSeekTime ?: 0) * 1000L
+        val resumePosition = musicStartPositionMs.coerceAtLeast(minStart.toLong())
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        player.seekTo(resumePosition)
+        applyMuteStateToMusic()
+        player.playWhenReady = true
+        player.play()
+    }
+
+    private fun pauseMusic() {
+        musicPlayer?.let {
+            musicStartPositionMs = it.currentPosition
+            it.pause()
+        }
+    }
+
+    private fun toggleMute() {
+        isMuted = !isMuted
+        PlaybackSettings.isMuted = isMuted
+        applyMuteStateToMusic()
+        updateMuteIcon()
+    }
+
+    private fun applyMuteStateToMusic() {
+        musicPlayer?.volume = if (isMuted) 0f else musicBaseVolume
+    }
+
+    private fun updateMuteIcon() {
+        if (!::muteButton.isInitialized) return
+        val iconRes = if (isMuted) R.drawable.sound_mute_icon else R.drawable.sound_play_icon
+        muteButton.setImageResource(iconRes)
+    }
+
+    private fun releaseMusicPlayer() {
+        musicPlayer?.release()
+        musicPlayer = null
     }
 }

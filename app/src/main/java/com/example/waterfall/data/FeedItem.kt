@@ -37,7 +37,10 @@ sealed class FeedItem {
         var likes: Int,          // 点赞数
         var liked: Boolean,      // 是否点赞
         val createTime: Long,     // 创建时间
-        val hashTags: List<ResponseDTO.HashTag>?    // 话题标签
+        val hashTags: List<ResponseDTO.HashTag>?,    // 话题标签
+        val musicUrl: String?,      // 音乐url
+        val musicVolume: Int?,      // 音乐音量
+        val musicSeekTime: Int?     // 音乐播放时间
     ) : FeedItem(), Parcelable
 
 }

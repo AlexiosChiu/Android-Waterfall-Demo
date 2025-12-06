@@ -227,22 +227,25 @@ class HomeFragment : Fragment() {
 
     private fun updateAdapterData(posts: List<ResponseDTO.Post>) {
         val feedItems = posts.asSequence().filter { !it.clips.isNullOrEmpty() }.map { post ->
-                val firstClip = post.clips!!.first()
-                FeedItem.ImageTextItem(
-                    id = post.postId,
-                    avatar = post.author.avatar,
-                    authorName = post.author.nickname,
-                    title = post.title,
-                    content = post.content,
-                    clips = post.clips.map { it.url },
-                    coverClip = firstClip.url,
-                    coverHeight = firstClip.height,
-                    coverWidth = firstClip.width,
-                    likes = 0,
-                    liked = false,
-                    createTime = post.createTime,
-                    hashTags = post.hashtag ?: emptyList()
-                )
+            val firstClip = post.clips!!.first()
+            FeedItem.ImageTextItem(
+                id = post.postId,
+                avatar = post.author.avatar,
+                authorName = post.author.nickname,
+                title = post.title,
+                content = post.content,
+                clips = post.clips.map { it.url },
+                coverClip = firstClip.url,
+                coverHeight = firstClip.height,
+                coverWidth = firstClip.width,
+                likes = 0,
+                liked = false,
+                createTime = post.createTime,
+                hashTags = post.hashtag ?: emptyList(),
+                musicUrl = post.music.url,
+                musicVolume = post.music.volume,
+                musicSeekTime = post.music.seekTime
+            )
         }.toList()
 
         submitFeedItems(feedItems)
