@@ -81,7 +81,9 @@ class HomeFragment : Fragment() {
 
     private fun setupRecyclerView(view: View) {
         recyclerView = view.findViewById(R.id.recyclerView)
-        adapter = FeedAdapter()
+        adapter = FeedAdapter().apply {
+            setHasStableIds(true)
+        }
 
         recyclerView.apply {
             layoutManager =
@@ -89,7 +91,8 @@ class HomeFragment : Fragment() {
                     gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
                 }
             setHasFixedSize(true)
-            recycledViewPool.setMaxRecycledViews(0, 20)
+            setItemViewCacheSize(12)
+            recycledViewPool.setMaxRecycledViews(0, 24)
             adapter = this@HomeFragment.adapter
             itemAnimator = null
             (parent as? ViewGroup)?.layoutTransition = null
@@ -184,18 +187,14 @@ class HomeFragment : Fragment() {
         if (!preloadedUrls.add(videoUrl)) return
         videoCoverScope.launch {
             videoPreloadSemaphore.withPermit {
-                val requestOptions = RequestOptions()
-                    .frame(750_000)
-                    .format(DecodeFormat.PREFER_RGB_565)
-                    .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                    .override(columnWidth, Target.SIZE_ORIGINAL)
-                    .downsample(DownsampleStrategy.AT_MOST)
+                val requestOptions =
+                    RequestOptions().frame(750_000).format(DecodeFormat.PREFER_RGB_565)
+                        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                        .override(columnWidth, Target.SIZE_ORIGINAL)
+                        .downsample(DownsampleStrategy.AT_MOST)
 
-                val target = glideRequestManager.asBitmap()
-                    .load(videoUrl)
-                    .apply(requestOptions)
-                    .thumbnail(0.25f)
-                    .submit()
+                val target = glideRequestManager.asBitmap().load(videoUrl).apply(requestOptions)
+                    .thumbnail(0.25f).submit()
 
                 try {
                     target.get()

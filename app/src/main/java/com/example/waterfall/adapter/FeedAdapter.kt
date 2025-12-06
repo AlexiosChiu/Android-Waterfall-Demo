@@ -4,13 +4,13 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
-import com.example.waterfall.R
+import androidx.recyclerview.widget.RecyclerView
 import com.example.waterfall.data.FeedItem
+import com.example.waterfall.databinding.ImageTextItemLayoutBinding
 import com.example.waterfall.holder.ImageTextViewHolder
-import com.example.waterfall.holder.ItemViewHolder
 import kotlin.math.roundToInt
 
-class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
+class FeedAdapter : ListAdapter<FeedItem, ImageTextViewHolder>(FeedDiffCallback()) {
 
     data class PreviewMeta(
         val url: String?, val isVideo: Boolean, val originalWidth: Int, val originalHeight: Int
@@ -20,6 +20,15 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
     private val previewMetaCache = mutableMapOf<String, PreviewMeta>()
     private var columnWidth: Int = 0
 
+    init {
+        setHasStableIds(true)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return (getItem(position) as? FeedItem.ImageTextItem)?.id?.hashCode()?.toLong()
+            ?: RecyclerView.NO_ID
+    }
+
     fun setColumnWidth(width: Int) {
         if (width > 0 && width != columnWidth) columnWidth = width
     }
@@ -28,21 +37,20 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
 
     fun getCachedHeight(itemId: String): Int? = heightCache[itemId]
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ItemViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.image_text_item_layout, parent, false)
-        return ImageTextViewHolder(view, this)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ImageTextViewHolder {
+        val binding = ImageTextItemLayoutBinding.inflate(
+            LayoutInflater.from(parent.context), parent, false
+        )
+        return ImageTextViewHolder(binding, this)
     }
 
-    override fun onBindViewHolder(holder: ItemViewHolder, position: Int) {
-        holder.bind(getItem(position))
+    override fun onBindViewHolder(holder: ImageTextViewHolder, position: Int) {
+        (getItem(position) as? FeedItem.ImageTextItem)?.let(holder::bind)
     }
 
-    override fun onViewRecycled(holder: ItemViewHolder) {
+    override fun onViewRecycled(holder: ImageTextViewHolder) {
+        holder.recycle()
         super.onViewRecycled(holder)
-        if (holder is ImageTextViewHolder) {
-            holder.recycle()
-        }
     }
 
     override fun submitList(list: List<FeedItem>?, commitCallback: Runnable?) {
@@ -77,10 +85,8 @@ class FeedAdapter : ListAdapter<FeedItem, ItemViewHolder>(FeedDiffCallback()) {
     private fun calculateTargetHeight(
         originalWidth: Int, originalHeight: Int, targetWidth: Int
     ): Int {
-
         if (originalWidth <= 0 || originalHeight <= 0) return targetWidth
         val ratio = (originalWidth.toFloat() / originalHeight.toFloat()).coerceIn(0.75f, 1.333f)
-
         return (targetWidth / ratio).roundToInt()
     }
 
