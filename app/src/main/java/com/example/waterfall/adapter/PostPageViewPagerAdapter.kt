@@ -40,6 +40,13 @@ class PostPageViewPagerAdapter(
     private var loadedCount = 0
     private val videoHolders = mutableSetOf<VideoViewHolder>()
     private var firstMediaAspectRatio: Float? = null
+    private val loadReported = BooleanArray(mediaUrls.size)
+
+    // 统一加载中占位&错误图配置
+    private val imageRequestOptions = RequestOptions()
+        .placeholder(R.drawable.loading)
+        .error(R.drawable.error)
+        .dontAnimate()
 
     inner class ImageViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val imageView: ImageView = itemView.findViewById(R.id.image_view_pager_item)
@@ -74,8 +81,11 @@ class PostPageViewPagerAdapter(
             tryApplyPreMeasuredAspectRatio(holder.itemView)
         }
         if (holder is ImageViewHolder) {
-            Glide.with(holder.itemView.context).load(url).apply(RequestOptions())
-                .listener(glideListener()).into(holder.imageView)
+            Glide.with(holder.itemView.context)
+                .load(url)
+                .apply(imageRequestOptions)
+                .listener(glideListener(position))
+                .into(holder.imageView)
         } else if (holder is VideoViewHolder) {
             bindVideo(holder, url, position)
         }
@@ -159,8 +169,8 @@ class PostPageViewPagerAdapter(
                                 play()
                                 holder.pendingPlay = false
                             }
-                            loadedCount++
-                            checkAllMediaLoaded()
+                            // 视频准备完毕时标记片段加载完成
+                            markMediaLoaded(position)
                         }
 
                         Player.STATE_ENDED -> {
@@ -174,8 +184,8 @@ class PostPageViewPagerAdapter(
                     Log.w(TAG, "ExoPlayer error for $url: ${error.message}", error)
                     holder.isPrepared = false
                     holder.pendingPlay = false
-                    loadedCount++
-                    checkAllMediaLoaded()
+                    // 视频错误同样视为完成一次加载尝试
+                    markMediaLoaded(position)
                 }
             })
 
@@ -186,12 +196,12 @@ class PostPageViewPagerAdapter(
         holder.playerView.useController = true
     }
 
-    private fun glideListener() = object : RequestListener<Drawable> {
+    private fun glideListener(position: Int) = object : RequestListener<Drawable> {
         override fun onLoadFailed(
             e: GlideException?, model: Any?, target: Target<Drawable>?, isFirstResource: Boolean
         ): Boolean {
-            loadedCount++
-            checkAllMediaLoaded()
+            // 图片失败也计入片段加载
+            markMediaLoaded(position)
             return false
         }
 
@@ -202,8 +212,8 @@ class PostPageViewPagerAdapter(
             dataSource: DataSource?,
             isFirstResource: Boolean
         ): Boolean {
-            loadedCount++
-            checkAllMediaLoaded()
+            // 图片成功计入片段加载
+            markMediaLoaded(position)
             return false
         }
     }
@@ -261,6 +271,15 @@ class PostPageViewPagerAdapter(
             }
         }
         return target
+    }
+
+    // 统一的加载完成统计逻辑
+    private fun markMediaLoaded(position: Int) {
+        if (position < 0 || position >= loadReported.size) return
+        if (loadReported[position]) return
+        loadReported[position] = true
+        loadedCount++
+        checkAllMediaLoaded()
     }
 
     private fun VideoViewHolder.reset() {
