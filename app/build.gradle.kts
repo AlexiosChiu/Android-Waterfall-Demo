@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.waterfall"
+    namespace = "com.alexioschiu.waterfall"
     compileSdk {
         version = release(36)
     }
