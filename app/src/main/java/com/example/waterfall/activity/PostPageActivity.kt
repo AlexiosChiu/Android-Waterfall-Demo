@@ -127,6 +127,7 @@ class PostPageActivity : AppCompatActivity() {
 
         // 初始化ViewPager - 支持图片和视频
         viewPager = findViewById(R.id.view_pager_post_page)
+        viewPager.setPageTransformer(null) // 禁用默认的页面缩放和变换效果
         adjustViewPagerHeight(0) // 先填充一个默认高度，确保首个item能够绑定
         mediaAdapter = PostPageViewPagerAdapter(
             mediaUrls = postItem.clips,
