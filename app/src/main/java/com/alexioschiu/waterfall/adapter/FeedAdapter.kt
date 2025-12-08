@@ -1,7 +1,9 @@
 package com.alexioschiu.waterfall.adapter
 
+import android.os.Build
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -44,6 +46,7 @@ class FeedAdapter : ListAdapter<FeedItem, ImageTextViewHolder>(FeedDiffCallback(
         return ImageTextViewHolder(binding, this)
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onBindViewHolder(holder: ImageTextViewHolder, position: Int) {
         (getItem(position) as? FeedItem.ImageTextItem)?.let(holder::bind)
     }

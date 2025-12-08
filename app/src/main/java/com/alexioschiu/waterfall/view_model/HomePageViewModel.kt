@@ -13,11 +13,11 @@ import kotlinx.coroutines.launch
 
 class HomePageViewModel : ViewModel() {
 
-    // UI状态
+    // StateFlow 用于处理 UI 状态
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState
 
-    // 添加一个 SharedFlow 用于处理一次性事件
+    // SharedFlow 用于处理一次性事件
     private val _refreshEvent = MutableSharedFlow<RefreshEvent>()
     val refreshEvent: SharedFlow<RefreshEvent> = _refreshEvent
 

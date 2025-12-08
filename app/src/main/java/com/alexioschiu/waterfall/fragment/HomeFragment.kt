@@ -22,6 +22,7 @@ import com.alexioschiu.waterfall.view_model.HomePageViewModel
 import com.alexioschiu.waterfall.view_model.HomeUiState
 import com.alexioschiu.waterfall.view_model.RefreshEvent
 import com.bumptech.glide.Glide
+import com.bumptech.glide.Priority
 import com.bumptech.glide.RequestManager
 import com.bumptech.glide.load.DecodeFormat
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
 
 class HomeFragment : Fragment() {
@@ -220,15 +222,29 @@ class HomeFragment : Fragment() {
                     RequestOptions().frame(750_000).format(DecodeFormat.PREFER_RGB_565)
                         .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
                         .override(columnWidth, Target.SIZE_ORIGINAL)
+                        .priority(Priority.IMMEDIATE)
                         .downsample(DownsampleStrategy.AT_MOST)
 
                 val target = glideRequestManager.asBitmap().load(videoUrl).apply(requestOptions)
                     .thumbnail(0.25f).submit()
 
                 try {
-                    target.get()
+                    try {
+                        // 阻塞获取结果，但捕获可能的取消/执行异常，避免协程崩溃
+                        target.get()
+                    } catch (ce: CancellationException) {
+                        // 协程被取消，安全返回
+                    } catch (ee: java.util.concurrent.ExecutionException) {
+                        // Glide 下载/解析失败，忽略单个资源错误
+                    } catch (e: Exception) {
+                        // 其它异常也忽略（防止崩溃）
+                    }
                 } finally {
-                    glideRequestManager.clear(target)
+                    try {
+                        glideRequestManager.clear(target)
+                    } catch (_: Exception) {
+                        // 忽略清理时的异常
+                    }
                 }
             }
         }

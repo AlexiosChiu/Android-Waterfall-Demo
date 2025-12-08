@@ -1,6 +1,7 @@
 package com.alexioschiu.waterfall.data
 
 import android.content.Context
+import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,7 @@ class FeedCacheManager(context: Context) {
     suspend fun saveFeedItems(items: List<FeedItem.ImageTextItem>) {
         withContext(Dispatchers.IO) {
             val json = gson.toJson(items, cacheType)
-            prefs.edit().putString(KEY_FEED_CACHE, json).apply()
+            prefs.edit { putString(KEY_FEED_CACHE, json) }
         }
     }
 
